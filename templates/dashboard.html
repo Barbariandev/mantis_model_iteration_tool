@@ -1,0 +1,1325 @@
+{% extends "base.html" %}
+{% block title %}MANTIS Agentic Mining{% endblock %}
+
+{% block content %}
+<div class="hero" id="nn-hero">
+    <canvas id="nn-canvas"></canvas>
+    <div class="hero-overlay">
+        <div class="hero-title">[MANTIS Agentic Mining]</div>
+        <div class="hero-line"></div>
+        <p class="hero-sub">&gt; autonomous strategy research // predictive market agents _</p>
+    </div>
+</div>
+<div id="dash-view">
+<div class="card" id="data-card" style="border-left:2px solid var(--accent);">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div><h3 style="margin-bottom:2px;">Data</h3>
+        <p class="text-sm text-tertiary">Fetch OHLCV + CoinGlass derivatives for all assets. Agents load from this cache.</p></div>
+        <div id="data-badge"></div>
+    </div>
+    <div id="data-status" style="margin-top:8px;"></div>
+    <div id="data-progress" style="display:none;margin-top:8px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <div class="pulse-dot"></div>
+            <span id="data-progress-text" class="text-sm" style="color:var(--text-secondary);"></span>
+        </div>
+        <div style="margin-top:6px;height:3px;background:var(--surface-raised);overflow:hidden;">
+            <div id="data-progress-bar" style="height:100%;background:var(--accent);width:0%;transition:width .3s;"></div>
+        </div>
+    </div>
+    <div id="data-controls" style="margin-top:10px;">
+        <div class="flex" style="gap:8px;align-items:flex-end;flex-wrap:wrap;">
+            <div>
+                <label style="font-size:9px;">CoinGlass API Key</label>
+                <input type="text" id="data-cg-key" placeholder="Optional - paste key for derivatives data" style="font-size:11px;width:280px;" {% if cg_key_set %}value="{{ cg_key_masked }}"{% endif %}>
+            </div>
+            <button class="btn btn-primary btn-sm" id="data-fetch-btn" onclick="startFetch()" style="padding:6px 16px;">Fetch Data</button>
+            <button class="btn btn-sm btn-ghost" id="data-delete-btn" onclick="deleteCache()" style="padding:6px 12px;font-size:10px;">Delete Cache</button>
+        </div>
+    </div>
+</div>
+<div class="card create-card">
+    <div class="create-header"><h3 style="margin-bottom:2px;">New Agent</h3>
+    <p class="text-sm text-tertiary">Define a research direction and let the agent iterate autonomously</p></div>
+    <form id="create-form">
+        <div class="form-row"><label>Research Goal</label>
+        <textarea name="goal" rows="2" placeholder="e.g. Explore mean-reversion signals using Bollinger Bands, RSI divergences..."></textarea></div>
+        <div class="challenge-picker"><label>Challenge</label><div class="challenge-grid" id="challenge-grid"></div></div>
+        <div class="form-inline" style="margin-top:14px;">
+            <div><label>Model</label><select name="model"><option value="sonnet">Sonnet</option><option value="opus">Opus</option><option value="haiku">Haiku</option></select></div>
+            <div><label>Iterations</label><div class="flex" style="gap:6px;">
+                <input type="number" name="min_iterations" value="5" min="1" max="50" style="width:50%;" placeholder="min">
+                <span class="text-tertiary" style="margin-top:2px;">&ndash;</span>
+                <input type="number" name="max_iterations" value="20" min="1" max="100" style="width:50%;" placeholder="max">
+            </div></div>
+            <div style="display:flex;align-items:flex-end;"><button type="submit" class="btn btn-primary" style="width:100%;padding:10px 24px;" id="launch-btn">Launch</button></div>
+        </div>
+    </form>
+</div>
+<div id="agent-list"></div>
+</div>
+<div id="settings-view" style="display:none;">
+    <h2 style="margin-bottom:16px;">Settings</h2>
+    <div class="card">
+        <h3 style="margin-bottom:8px;">Appearance</h3>
+        <label>Theme</label>
+        <div class="theme-grid" id="theme-grid"></div>
+    </div>
+    <div class="card" id="ant-section">
+        <h3 style="margin-bottom:2px;">Anthropic API Key</h3>
+        <p class="text-sm text-tertiary" style="margin-bottom:10px;">Required for running agents. Stored locally, never sent externally.</p>
+        <div class="flex" style="gap:8px;align-items:center;flex-wrap:wrap;" id="ant-status">
+            {% if ant_key_set %}<span class="badge badge-completed" style="font-size:11px;">{{ ant_key_masked }}</span>
+            <button class="btn btn-sm btn-ghost" onclick="deleteAntKey()">Remove</button>
+            {% else %}
+            <input id="ant-key-input" type="password" placeholder="sk-ant-..." style="flex:1;min-width:200px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:12px;">
+            <button class="btn btn-sm" onclick="saveAntKey()">Save</button>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card" id="cg-section">
+        <h3 style="margin-bottom:2px;">CoinGlass API Key</h3>
+        <p class="text-sm text-tertiary" style="margin-bottom:10px;">Optional. Enables derivatives data (funding rates, open interest, etc.).</p>
+        <div class="flex" style="gap:8px;align-items:center;flex-wrap:wrap;" id="cg-status">
+            {% if cg_key_set %}<span class="badge badge-completed" style="font-size:11px;">{{ cg_key_masked }}</span>
+            <button class="btn btn-sm btn-ghost" onclick="deleteCgKey()">Remove</button>
+            {% else %}
+            <input id="cg-key-input" type="password" placeholder="CoinGlass key..." style="flex:1;min-width:200px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:12px;">
+            <button class="btn btn-sm" onclick="saveCgKey()">Save</button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<div id="guide-view" style="display:none;">
+<h2 style="margin-bottom:16px;">Guide</h2>
+
+<div class="card">
+<h3>What is MANTIS Agentic Mining?</h3>
+<p style="line-height:1.7;color:var(--text-secondary);margin-top:8px;">
+An autonomous research platform for cryptocurrency signal discovery on the MANTIS subnet. Define a <strong>challenge</strong> (what to predict) and a <strong>goal</strong> (what approach to explore), then an AI agent iteratively builds features, trains models, and evaluates them using walk-forward evaluation with strict data leakage prevention. Each iteration, the agent writes code, runs evaluation, analyzes results, and refines its strategy &mdash; visible in real-time on this dashboard.
+</p>
+</div>
+
+<div class="card">
+<h3>Quick Start</h3>
+<ol style="line-height:2;color:var(--text-secondary);margin-top:8px;padding-left:20px;">
+<li><strong>Pick a challenge</strong> from the grid on the dashboard. Each challenge defines a target (binary direction, volatility buckets, cross-sectional rank, etc.), a time horizon, and a primary evaluation metric.</li>
+<li><strong>Write a goal</strong> that tells the agent what kind of signals to explore. Be specific about the domain, the intuition, and what data sources to use. The goal is the most important input you provide.</li>
+<li><strong>Set iterations</strong>. 5&ndash;10 is a good range for initial exploration. The agent will run that many cycles of hypothesis &rarr; code &rarr; evaluate &rarr; analyze.</li>
+<li><strong>Launch and watch</strong>. Notes appear within 30&ndash;60 seconds. Metrics show up after each evaluation completes. Use the tabs on each agent&rsquo;s page to monitor progress.</li>
+</ol>
+</div>
+
+<div class="card">
+<h3>Challenges Explained</h3>
+<div style="margin-top:10px;">
+<div style="margin-bottom:16px;">
+<div style="font-weight:700;color:var(--accent);font-size:13px;">ETH-1H-BINARY</div>
+<div style="color:var(--text-secondary);font-size:12px;line-height:1.6;margin-top:4px;">
+Predict whether ETH price will be higher or lower in 60 minutes. Binary classification. <strong>Metric: AUC</strong> (0.5 = random, higher is better). The simplest challenge &mdash; good for testing new feature ideas quickly. Embedding dim: 2 (model outputs 2 values, interpreted as class probabilities).
+</div></div>
+<div style="margin-bottom:16px;">
+<div style="font-weight:700;color:var(--accent);font-size:13px;">ETH-HITFIRST-100M</div>
+<div style="color:var(--text-secondary);font-size:12px;line-height:1.6;margin-top:4px;">
+Predict which direction (up or down by 1&sigma;) ETH hits first within 100 minutes. Three-class problem (up-first, down-first, neither). <strong>Metric: Up/Down AUC + Direct Log Loss</strong>. Harder than binary because it requires understanding volatility structure and asymmetric price behavior. Embedding dim: 3.
+</div></div>
+<div style="margin-bottom:16px;">
+<div style="font-weight:700;color:var(--accent);font-size:13px;">ETH-LBFGS / BTC-LBFGS-6H</div>
+<div style="color:var(--text-secondary);font-size:12px;line-height:1.6;margin-top:4px;">
+Predict vol-normalized return buckets (5 classes: far-down, slightly-down, neutral, slightly-up, far-up). ETH uses 60-min horizon, BTC uses 360-min (6 hour). <strong>Metric: Balanced Accuracy</strong> (0.2 = random baseline for 5 classes). The hardest single-asset challenge. Embedding dim: 17. No meta-model: direct argmax of the first 5 embedding dims as bucket probabilities.
+</div></div>
+<div style="margin-bottom:16px;">
+<div style="font-weight:700;color:var(--accent);font-size:13px;">MULTI-BREAKOUT</div>
+<div style="color:var(--text-secondary);font-size:12px;line-height:1.6;margin-top:4px;">
+Predict breakout direction across multiple assets simultaneously. Event-driven: the system detects range formations and scores whether your prediction of the breakout direction is correct. <strong>Metric: AUC</strong>. Multi-asset (BTC, ETH, SOL, etc.). Requires features that generalize across assets, not just one.
+</div></div>
+<div style="margin-bottom:16px;">
+<div style="font-weight:700;color:var(--accent);font-size:13px;">XSEC-RANK</div>
+<div style="color:var(--text-secondary);font-size:12px;line-height:1.6;margin-top:4px;">
+Cross-sectional ranking: predict which assets will outperform the median over 240 minutes (4 hours). <strong>Metric: Spearman correlation</strong> between predicted ranks and actual returns. Requires features that capture relative momentum, mean-reversion, or other cross-sectional patterns across all assets simultaneously.
+</div></div>
+</div></div>
+
+<div class="card">
+<h3>Writing Effective Goals</h3>
+<p style="color:var(--text-secondary);line-height:1.7;margin-top:8px;">
+The goal is the single most important thing you write. A vague goal like <em>&ldquo;predict ETH price&rdquo;</em> produces generic momentum features that don&rsquo;t work. A specific goal drives the agent toward non-obvious signals.
+</p>
+<div style="margin-top:14px;">
+<div style="font-weight:700;font-size:11px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Good goals</div>
+<ul style="color:var(--text-secondary);font-size:12px;line-height:1.8;padding-left:18px;">
+<li><em>&ldquo;Explore funding-rate-inspired conditional features. When funding is extremely positive (crowded longs), look for mean-reversion signals. Use CoinGlass data for OI and funding rates. Focus on regime-conditional features, not raw momentum.&rdquo;</em></li>
+<li><em>&ldquo;Build features inspired by ICT concepts: displacement after large candles, fair value gaps from volume imbalances, and liquidity sweep patterns. The hypothesis is that large displacements followed by retracements create predictable continuation.&rdquo;</em></li>
+<li><em>&ldquo;Cross-sectional momentum: find features that identify which assets are about to revert vs. continue. Focus on relative volume anomalies, spread dynamics, and correlation breakdown across the asset universe.&rdquo;</em></li>
+<li><em>&ldquo;Microstructure signals: explore volume-weighted price patterns, VWAP deviations, and order flow imbalance proxies derived from OHLCV data. The intuition is that volume distribution within candles reveals institutional activity.&rdquo;</em></li>
+</ul></div>
+<div style="margin-top:14px;">
+<div style="font-weight:700;font-size:11px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Bad goals</div>
+<ul style="color:var(--text-secondary);font-size:12px;line-height:1.8;padding-left:18px;">
+<li><em>&ldquo;Make money&rdquo;</em> &mdash; too vague, no signal hypothesis</li>
+<li><em>&ldquo;Use machine learning to predict price&rdquo;</em> &mdash; the framework already handles ML; tell it <em>what signals</em> to look for</li>
+<li><em>&ldquo;Try everything&rdquo;</em> &mdash; the agent needs direction; undirected search wastes iterations</li>
+</ul></div>
+</div>
+
+<div class="card">
+<h3>Understanding the Evaluation</h3>
+<p style="color:var(--text-secondary);line-height:1.7;margin-top:8px;">
+Every metric you see comes from <strong>walk-forward evaluation</strong> on held-out data. This is the gold standard for time-series model validation:
+</p>
+<ul style="color:var(--text-secondary);font-size:12px;line-height:2;padding-left:18px;margin-top:8px;">
+<li><strong>Dev set</strong>: The first ~40 days. The agent explores features and computes correlations here. Feature analysis on the Features tab uses only dev data.</li>
+<li><strong>Eval holdout</strong>: The last 20 days. The agent never sees this data directly. Walk-forward windows slide through this period.</li>
+<li><strong>Walk-forward</strong>: The model is re-trained on expanding windows and tested on forward data. This simulates real deployment &mdash; the model only uses past data at each point.</li>
+<li><strong>Causal protection</strong>: The <code>CausalView</code> object physically prevents access to future data. At timestep <em>t</em>, only data from 0..t is accessible. This is enforced at the framework level, not by convention.</li>
+</ul>
+<p style="color:var(--text-secondary);line-height:1.7;margin-top:10px;">
+<strong>Key insight</strong>: A feature can show strong dev correlation but fail in walk-forward (spurious/overfit). Conversely, a feature with modest dev correlation can contribute meaningfully when combined with others. Trust the walk-forward metrics, not dev correlations.
+</p></div>
+
+<div class="card">
+<h3>Reading the Features Tab</h3>
+<p style="color:var(--text-secondary);line-height:1.7;margin-top:8px;">
+The Features tab shows the agent's own feature report -- the analysis it computed on the dev set. The agent is responsible for running correlations, computing statistics, and interpreting its features.
+</p>
+<ul style="color:var(--text-secondary);font-size:12px;line-height:2;padding-left:18px;margin-top:8px;">
+<li><strong>Spearman &rho;</strong>: Rank correlation between feature value and forward returns. Robust to outliers. The primary signal indicator for continuous targets.</li>
+<li><strong>P-value</strong>: Statistical significance of the correlation. With non-overlapping samples, these are trustworthy. <span style="color:var(--green);">p&lt;.001</span> is strong, <span style="color:var(--accent);">p&lt;.05</span> is suggestive, <span style="color:var(--text-tertiary);">ns</span> means not significant.</li>
+<li><strong>AUC</strong> (binary challenges): How well the feature alone separates up/down. 0.5 = random. &gt;0.52 is interesting for a single feature.</li>
+<li><strong>Point-biserial</strong> (binary): Correlation between continuous feature and binary label. Signed &mdash; positive means higher feature value &rarr; higher probability of &ldquo;up&rdquo;.</li>
+<li><strong>Kruskal-Wallis H</strong> (multiclass): Non-parametric test for whether the feature distribution differs across target categories. Higher H = more discriminative.</li>
+<li><strong>Eta-squared &eta;&sup2;</strong> (multiclass): Effect size &mdash; fraction of feature variance explained by the target class. &gt;0.01 is notable for financial data.</li>
+<li><strong>N (indep)</strong>: Number of independent (non-overlapping) samples used. This is the effective sample size for the p-value calculation.</li>
+</ul>
+<p style="color:var(--text-secondary);line-height:1.7;margin-top:10px;">
+Columns shown depend on the challenge type. Binary challenges show AUC and point-biserial; multiclass (LBFGS) shows Kruskal-Wallis and eta-squared. All challenges show Spearman with forward returns.
+</p></div>
+
+<div class="card">
+<h3>Agent Communication</h3>
+<p style="color:var(--text-secondary);line-height:1.7;margin-top:8px;">
+Each agent page has a <strong>Chat</strong> tab for communicating with the agent:
+</p>
+<ul style="color:var(--text-secondary);font-size:12px;line-height:2;padding-left:18px;margin-top:8px;">
+<li><strong>Message Agent</strong>: Writes directly to the agent&rsquo;s <code>INBOX.md</code>. The agent reads this at the start of its next iteration and follows your instructions. Use this to steer: <em>&ldquo;Stop using momentum features, try volume-based signals instead&rdquo;</em> or <em>&ldquo;The funding rate feature is working &mdash; double down on derivatives-based features.&rdquo;</em></li>
+</ul></div>
+
+<div class="card">
+<h3>Custom Data</h3>
+<p style="color:var(--text-secondary);line-height:1.7;margin-top:8px;">
+Agents can fetch data from external APIs and integrate it into the evaluation pipeline. If the agent creates a <code>custom_data/</code> directory in its workspace with <code>.npy</code> or <code>.npz</code> arrays, the eval script automatically loads them into the <code>CausalView</code> layer, accessible via <code>view.cg(asset, field)</code>.
+</p>
+<p style="color:var(--text-secondary);line-height:1.7;margin-top:8px;">
+<strong>Warning</strong>: Custom data bypasses the framework&rsquo;s built-in causal alignment. The agent must implement its own last-completed-candle logic to prevent lookahead bias. Iterations using custom data are flagged with a pulsing <span style="color:#f59e0b;font-weight:700;">CUSTOM DATA</span> badge.
+</p>
+<p style="color:var(--text-secondary);line-height:1.7;margin-top:8px;">
+To enable this, tell the agent in its goal or via a message: <em>&ldquo;Fetch sentiment data from [API] using key [xxx]. Save 1-minute aligned arrays to custom_data/BTC/sentiment.npy. Use last-completed-candle alignment.&rdquo;</em>
+</p></div>
+
+<div class="card">
+<h3>CoinGlass Integration</h3>
+<p style="color:var(--text-secondary);line-height:1.7;margin-top:8px;">
+CoinGlass provides derivatives data: open interest, funding rates, liquidations, and long/short ratios. To use it:
+</p>
+<ol style="color:var(--text-secondary);font-size:12px;line-height:2;padding-left:18px;margin-top:8px;">
+<li>Enter your CoinGlass API key in the data card on the dashboard (or in Settings).</li>
+<li>Click <strong>Fetch Data</strong> to prefetch and cache all CoinGlass fields alongside OHLCV data.</li>
+<li>When spawning agents, the cached data is automatically available. The agent accesses it via <code>view.cg('BTC', 'funding_1h')</code>, etc.</li>
+</ol>
+<p style="color:var(--text-secondary);line-height:1.7;margin-top:8px;">
+Available fields: <code>oi_1h</code>, <code>oi_1d</code> (open interest), <code>funding_1h</code> (funding rate), <code>liq_long_1h</code> / <code>liq_short_1h</code> (liquidations), <code>ls_ratio_1h</code> (long/short ratio). All are causally aligned &mdash; each minute shows the value from the last completed hourly/daily candle. No future data leaks.
+</p></div>
+
+<div class="card">
+<h3>Tips &amp; Patterns</h3>
+<ul style="color:var(--text-secondary);font-size:12px;line-height:2.2;padding-left:18px;margin-top:8px;">
+<li><strong>Start with BTC-LBFGS-6H or ETH-1H-BINARY</strong>. These have the clearest signal-to-noise and the most forgiving metrics. XSEC-RANK is significantly harder.</li>
+<li><strong>5 iterations minimum</strong>. The first 1&ndash;2 iterations are usually naive baselines. Real improvement starts at iteration 3&ndash;4 when the agent has feedback on what failed.</li>
+<li><strong>Read the agent&rsquo;s notes</strong>. The Notes tab shows the agent&rsquo;s reasoning and STATE.md (persistent memory). If it is going in the wrong direction, message it early.</li>
+<li><strong>Domain-specific goals outperform generic ones</strong>. <em>&ldquo;Explore funding rate regimes&rdquo;</em> beats <em>&ldquo;find alpha&rdquo;</em>.</li>
+<li><strong>Feature count matters less than feature quality</strong>. 3 well-chosen features often beat 50 noisy ones. Encourage the agent to prune aggressively.</li>
+<li><strong>Watch for overfitting</strong>: high dev correlations but poor walk-forward metrics. The Features tab helps diagnose this.</li>
+<li><strong>Different challenges want different features</strong>. Binary needs momentum/trend. LBFGS needs volatility-regime. XSEC-RANK needs relative/cross-sectional. Tailor the goal.</li>
+<li><strong>CoinGlass data is powerful but not magic</strong>. Funding and OI are known signals. The edge comes from <em>how</em> you combine them (conditional features, regime switches), not from having the raw data.</li>
+<li><strong>Use Message Agent to course-correct</strong>. If the agent is stuck on one approach after 3 iterations, redirect it.</li>
+<li><strong>Run multiple agents in parallel</strong>. 2&ndash;3 agents on the same challenge with different goals explore the space faster. Compare their best metrics.</li>
+<li><strong>Sonnet is fast, Opus is thorough</strong>. Use Sonnet for rapid exploration, Opus when you want deeper analysis or more creative feature engineering.</li>
+</ul></div>
+
+<div class="card">
+<h3>Architecture Overview</h3>
+<p style="color:var(--text-secondary);line-height:1.7;margin-top:8px;">
+Each agent runs as a Claude Code instance inside a sandboxed Docker container, with full persistence across GUI restarts. The iteration loop:
+</p>
+<ol style="color:var(--text-secondary);font-size:12px;line-height:2;padding-left:18px;margin-top:8px;">
+<li>Agent reads <code>INSTRUCTIONS.md</code>, <code>GOAL.md</code>, <code>STATE.md</code>, <code>HISTORY.md</code>, and <code>INBOX.md</code></li>
+<li>Writes hypothesis to <code>notes.txt</code> (shows up on dashboard immediately)</li>
+<li>Writes strategy code to <code>iteration_N.py</code> (Featurizer + Predictor classes)</li>
+<li>Runs <code>_eval_N.py</code> (generated by the system, immutable) which does walk-forward evaluation</li>
+<li>Reads results from <code>_result_N.json</code>, writes analysis JSON, updates <code>STATE.md</code></li>
+<li>System collects everything into <code>log.json</code>, frontend updates</li>
+<li>Next iteration starts automatically</li>
+</ol>
+<p style="color:var(--text-secondary);line-height:1.7;margin-top:10px;">
+The eval script is generated fresh each iteration and cannot be modified by the agent. This ensures evaluation integrity. Data is loaded from a shared cache (prefetched once), so agents don&rsquo;t hit APIs repeatedly.
+</p></div>
+
+<div class="card">
+<h3>Navigation</h3>
+<ul style="color:var(--text-secondary);font-size:12px;line-height:2;padding-left:18px;margin-top:8px;">
+<li>Click any agent card on the dashboard to view its detail page.</li>
+<li>Use the <strong>Overview</strong>, <strong>Iterations</strong>, <strong>Features</strong>, <strong>Deploy</strong>, <strong>Notes</strong>, and <strong>Chat</strong> tabs to navigate agent data.</li>
+<li>Browser back/forward buttons work as expected (SPA routing).</li>
+<li>Dashboard auto-refreshes every 10 seconds while agents are running. Agent detail pages poll every 3 seconds for live updates.</li>
+</ul></div>
+
+</div>
+<div id="agent-view" style="display:none;"></div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.hero{position:relative;overflow:hidden;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:16px}
+#nn-canvas{display:block;width:100%;height:340px;background:var(--bg)}
+.hero-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;z-index:2}
+.hero-title{font-size:28px;font-weight:700;letter-spacing:.15em;color:var(--accent);text-shadow:0 0 30px var(--bg),0 0 60px var(--bg)}
+body.theme-uppercase .hero-title{text-transform:uppercase}
+body.scanlines .hero-title{text-shadow:0 0 20px var(--accent-dim),0 0 40px var(--accent-dim),0 0 60px var(--bg)}
+body.theme-classic .hero-title{font-size:36px;letter-spacing:-.03em;color:var(--text);background:linear-gradient(135deg,var(--text) 0%,var(--accent) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-line{width:120px;height:1px;background:var(--accent);margin:12px auto;opacity:.4}
+body.scanlines .hero-line{box-shadow:0 0 8px var(--accent-dim)}
+body.theme-classic .hero-line{display:none}
+.hero-sub{margin-top:8px;font-size:12px;color:var(--text-secondary);letter-spacing:.02em;text-shadow:0 0 20px var(--bg),0 0 40px var(--bg)}
+.cg-card{padding:14px 16px;margin-bottom:8px}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;transition:all .15s}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.create-card{padding:20px}.create-header{margin-bottom:14px}
+.challenge-picker{margin-top:4px}
+.challenge-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;margin-top:8px}
+.challenge-option{cursor:pointer;display:block}.challenge-option input{display:none}
+.challenge-option-inner{padding:10px 12px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg);transition:all .15s}
+.challenge-option:hover .challenge-option-inner{border-color:var(--border-hover)}
+.challenge-option.selected .challenge-option-inner,.challenge-option input:checked+.challenge-option-inner{border-color:var(--accent);background:var(--accent-dim)}
+.co-name{display:block;font-size:11px;font-weight:700;color:var(--accent);margin-bottom:3px}
+.co-desc{display:block;font-size:10px;color:var(--text-secondary);line-height:1.4}
+.co-meta{display:flex;gap:6px;margin-top:6px}
+.co-tag{font-size:9px;padding:1px 6px;background:transparent;color:var(--text-tertiary);font-weight:700;border:1px solid var(--text-tertiary);text-transform:uppercase;letter-spacing:.05em}
+.section-header{display:flex;justify-content:space-between;align-items:baseline;margin:16px 0 8px;padding:0 2px;border-bottom:1px solid var(--border);padding-bottom:6px}
+.agent-link{text-decoration:none;color:inherit;display:block;cursor:pointer}
+.agent-card{cursor:pointer}.agent-card:hover{border-color:var(--accent)}
+.agent-id{font-size:12px;font-weight:700;color:var(--accent)}
+.agent-goal{margin-top:4px;font-size:11px;color:var(--text-secondary);line-height:1.4}
+.agent-meta{margin-top:6px;display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-tertiary)}
+.agent-meta .sep{width:1px;height:10px;background:var(--text-tertiary);opacity:.4}
+.agent-best{color:var(--accent);font-weight:700}
+.notes-pre{white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.6;color:var(--text-secondary);max-height:300px;overflow-y:auto;padding:10px 12px;background:var(--bg);border:1px solid var(--border);margin:0;font-family:var(--font-mono,monospace)}
+.thoughts-box{margin-top:10px;padding:10px 12px;background:var(--bg);border:1px solid var(--border)}
+.thought-block{padding:4px 0;font-size:10px;color:var(--text-tertiary);line-height:1.5;border-bottom:1px solid var(--border)}
+.thought-block:last-child{border-bottom:none}
+.theme-grid{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.theme-swatch{cursor:pointer;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:all .15s;display:flex;align-items:center;gap:8px;min-width:100px}
+.theme-swatch:hover{border-color:var(--border-hover)}
+.theme-swatch.active{border-color:var(--accent);background:var(--accent-dim)}
+.theme-preview{width:14px;height:14px;border-radius:2px;border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700}
+.theme-swatch-label{font-size:11px;font-weight:700;color:var(--text-secondary)}
+.theme-swatch.active .theme-swatch-label{color:var(--accent)}
+.av-back{cursor:pointer;font-size:12px;color:var(--text-secondary);margin-bottom:12px;display:inline-block}
+.av-back:hover{color:var(--accent)}
+.meta-row{display:flex;gap:18px;flex-wrap:wrap}
+.meta-item{display:flex;flex-direction:column;gap:1px}
+.meta-label{font-size:9px;color:var(--text-tertiary);font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.meta-value{font-size:12px;color:var(--accent);font-weight:700}
+body.theme-classic .meta-label{font-size:11px;font-weight:500;text-transform:none;letter-spacing:0}
+body.theme-classic .meta-value{font-size:14px;font-weight:500;color:var(--text)}
+.summary-card{border-left:2px solid var(--accent)}
+.summary-grid{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end}
+.summary-item{display:flex;flex-direction:column;gap:1px}
+.summary-label{font-size:8px;color:var(--text-tertiary);font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.summary-value{font-size:20px;font-weight:700;color:var(--accent)}
+.summary-value-secondary{font-size:14px;font-weight:700;color:var(--text-secondary)}
+.iter-card{border-left:2px solid transparent}.iter-latest{border-left-color:var(--accent)}
+.iter-num{font-size:12px;font-weight:700;color:var(--accent);width:22px;height:22px;display:flex;align-items:center;justify-content:center;border:1px solid var(--accent);background:transparent}
+body.theme-classic .iter-num{border-radius:6px;border:none;background:var(--surface-raised);color:var(--text)}
+.pills{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px}
+.pill{background:transparent;border:1px solid var(--border);padding:3px 8px;display:flex;flex-direction:column}
+.pill-accent{border-color:var(--accent)}.pill-label{font-size:8px;color:var(--text-tertiary);font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.pill-value{font-size:13px;font-weight:700;color:var(--text-secondary)}.pill-accent .pill-value{color:var(--accent)}
+.notes-box{margin-top:6px;padding:6px 10px;background:var(--bg);border:1px solid var(--border)}
+.note-line{display:flex;gap:8px;padding:2px 0;font-size:11px;color:var(--text-secondary);line-height:1.5}
+.note-dot{width:3px;height:3px;background:var(--accent);margin-top:7px;flex-shrink:0}
+.insight-block{margin-top:4px;padding:6px 10px;background:var(--bg);border-left:2px solid var(--border)}
+.insight-hypothesis{border-left-color:var(--accent)}.insight-positive{border-left-color:var(--green)}.insight-negative{border-left-color:var(--red)}
+.insight-label{font-size:8px;color:var(--text-tertiary);font-weight:700;display:block;margin-bottom:2px;text-transform:uppercase;letter-spacing:.08em}
+.insight-block p{font-size:10px;color:var(--text-secondary);line-height:1.4}
+.insight-pair{display:flex;gap:6px;flex-wrap:wrap}.insight-pair .insight-block{flex:1;min-width:200px}
+.feat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:3px}
+.feat-card{background:var(--bg);border:1px solid var(--border);padding:5px 7px;transition:border-color .15s}
+.feat-card:hover{border-color:var(--accent)}
+.feat-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1px}
+.feat-name{font-weight:700;color:var(--accent);font-size:10px}
+.feat-rank{font-size:8px;color:var(--text-tertiary);border:1px solid var(--text-tertiary);padding:0 3px;font-weight:700}
+.feat-desc{font-size:9px;color:var(--text-secondary);margin-bottom:1px;line-height:1.3}
+.feat-stats{margin-top:2px;padding-top:2px;border-top:1px solid var(--border);font-size:8px;color:var(--text-tertiary);display:flex;gap:6px}
+.corr-bars{display:flex;flex-direction:column;gap:1px}
+.corr-row{display:flex;align-items:center;gap:4px}
+.corr-label{width:16px;font-size:9px;color:var(--text-tertiary);text-align:right}
+.corr-track{flex:1;height:6px;background:var(--surface-raised);overflow:hidden}
+.corr-fill{height:100%;transition:width .3s}
+.corr-val{width:50px;font-size:9px;font-weight:700}
+.activity-box{display:flex;flex-wrap:wrap;gap:3px;margin-top:8px}
+.activity-item{display:inline-block;padding:1px 6px;font-size:9px;color:var(--text-tertiary);background:transparent;border:1px solid rgba(128,128,128,.12);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.error-box{margin-top:10px;padding:10px;background:var(--red-dim);font-size:11px;color:var(--red);line-height:1.5;border:1px solid rgba(255,51,51,.2)}
+.metric-legend{display:flex;gap:12px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-tertiary);cursor:pointer;user-select:none;font-weight:700}
+.legend-swatch{width:6px;height:6px}
+.pulse-dot{width:6px;height:6px;background:var(--accent);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+.chat-container{display:flex;flex-direction:column;gap:0;max-height:300px;overflow-y:auto;padding:4px 0}
+.chat-msg{display:flex;gap:8px;padding:5px 10px;font-size:11px;line-height:1.5}
+.chat-msg-user{background:var(--accent-dim);border-left:2px solid var(--accent)}
+.chat-msg-assistant{background:transparent;border-left:2px solid var(--green)}
+.chat-msg-system{background:transparent;border-left:2px solid var(--border);opacity:.6}
+.chat-role{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-tertiary);min-width:44px;flex-shrink:0;padding-top:1px}
+.chat-msg-user .chat-role{color:var(--accent)}
+.chat-msg-assistant .chat-role{color:var(--green)}
+.chat-text{color:var(--text-secondary);word-break:break-word;white-space:pre-wrap}
+.chat-ts{font-size:9px;color:var(--text-tertiary);opacity:.5;margin-left:auto;flex-shrink:0;padding-top:1px}
+.chat-input-row{display:flex;gap:6px;margin-top:6px;align-items:flex-end}
+.chat-input-row textarea{flex:1;resize:none;min-height:32px;max-height:100px;font-size:11px;padding:6px 10px;font-family:var(--font-mono,monospace)}
+.chat-input-row button{flex-shrink:0;padding:6px 14px;font-size:11px}
+.chat-section-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-tertiary);margin-top:10px;margin-bottom:4px}
+.chat-thinking{display:flex;align-items:center;gap:6px;padding:5px 10px;font-size:10px;color:var(--text-tertiary);border-left:2px solid var(--green);font-style:italic}
+.chat-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:800px){.chat-cols{grid-template-columns:1fr}}
+.agent-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px}
+.agent-tab{padding:8px 18px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-tertiary);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.agent-tab:hover{color:var(--text-secondary)}
+.agent-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.agent-tab .tab-count{font-size:9px;color:var(--text-tertiary);margin-left:4px;font-weight:400}
+.agent-tab.active .tab-count{color:var(--accent);opacity:.7}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+.overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+@media(max-width:800px){.overview-grid{grid-template-columns:1fr}}
+.stat-card{padding:12px 14px;background:var(--bg);border:1px solid var(--border)}
+.stat-card-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-tertiary);margin-bottom:4px}
+.stat-card-value{font-size:18px;font-weight:700;color:var(--accent)}
+.stat-card-sub{font-size:10px;color:var(--text-secondary);margin-top:2px}
+.state-md-block{white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.6;color:var(--text-secondary);padding:12px;background:var(--bg);border:1px solid var(--border);max-height:500px;overflow-y:auto;font-family:var(--font-mono,monospace)}
+.feat-table{width:100%;border-collapse:collapse;font-size:11px;font-family:var(--font-mono,monospace)}
+.feat-table th{text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-tertiary);padding:6px 10px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap}
+.feat-table th:hover{color:var(--accent)}
+.feat-table th .sort-arrow{font-size:8px;margin-left:3px;opacity:.4}
+.feat-table th.sorted .sort-arrow{opacity:1;color:var(--accent)}
+.feat-table td{padding:5px 10px;border-bottom:1px solid var(--border);color:var(--text-secondary);vertical-align:top}
+.feat-table tr:hover td{background:var(--surface-raised)}
+.feat-table .feat-name-cell{font-weight:700;color:var(--accent);font-size:10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pval-badge{display:inline-block;padding:1px 5px;font-size:9px;font-weight:700;border-radius:2px}
+.pval-sig3{background:rgba(0,255,65,.15);color:var(--green)}
+.pval-sig2{background:rgba(0,255,65,.08);color:var(--green);opacity:.8}
+.pval-sig1{background:rgba(255,170,0,.1);color:#ffaa00}
+.pval-ns{background:transparent;color:var(--text-tertiary);opacity:.5}
+.corr-bar-inline{display:inline-block;height:10px;min-width:2px;vertical-align:middle;margin-left:4px;opacity:.7}
+.feat-iter-select{font-size:10px;padding:4px 8px;background:var(--bg);color:var(--text-secondary);border:1px solid var(--border)}
+</style>
+<script>
+var CINFO={{ challenge_info|safe }},CMETRICS={{ challenge_metrics|safe }},CLIST={{ challenges|tojson|safe }},AGENTS={{ agents_json|safe }};
+var currentView="dashboard",currentAgentId=null,agentChart=null,pollTimer=null;
+function F(v,d){return typeof v==="number"?v.toFixed(d||4):String(v)}
+function E(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function minfo(ch){return CMETRICS[ch]||{primary:"mean_auc",all:["mean_auc"],direction:"higher",label:"AUC"}}
+function findPrimary(a){
+var mi=minfo((a.config||{}).challenge);
+var its=a.iterations||[];
+for(var i=0;i<its.length;i++){if(!its[i].has_error&&(its[i].metrics||{})[mi.primary]!=null)return mi.primary}
+var SKIP={"n_timesteps":1,"n_valid":1,"horizon":1,"n_events":1,"n_scored":1,"n_assets":1,"n_evaluated":1,"windows":1,"dev_length":1,"eval_holdout_minutes":1};
+var PERF=["mean_auc","mean_direct_auc","mean_balanced_accuracy","mean_spearman","direct_log_loss","mean_lift","up_auc","dn_auc"];
+for(var p=0;p<PERF.length;p++){for(var i=0;i<its.length;i++){if(!its[i].has_error&&(its[i].metrics||{})[PERF[p]]!=null)return PERF[p]}}
+return mi.primary}
+function bestM(a){var mi=minfo((a.config||{}).challenge),pk=findPrimary(a),b=null;
+for(var it of(a.iterations||[])){if(it.has_error)continue;var v=(it.metrics||{})[pk];if(v==null)continue;
+if(b===null){b=v;continue}if(mi.direction==="higher"&&v>b)b=v;if(mi.direction==="lower"&&v<b)b=v}return b}
+
+// Theme picker
+!function(){var g=document.getElementById("theme-grid"),pc={retro:"#00ff41",mono:"#fff",classic:"#818cf8",amber:"#ffb000"},pb={retro:"#000",mono:"#080808",classic:"#0c0c0f",amber:"#0a0600"},cur=localStorage.getItem("mantis-theme")||"retro";Object.keys(THEMES).forEach(function(k){var el=document.createElement("div");el.className="theme-swatch"+(k===cur?" active":"");el.innerHTML='<div class="theme-preview" style="background:'+pb[k]+';color:'+pc[k]+';">A</div><span class="theme-swatch-label">'+THEMES[k].label+"</span>";el.addEventListener("click",function(){applyTheme(k);g.querySelectorAll(".theme-swatch").forEach(function(s){s.classList.remove("active")});el.classList.add("active")});g.appendChild(el)})}();
+
+// Challenge grid
+!function(){var g=document.getElementById("challenge-grid");CLIST.forEach(function(c,i){var ci=CINFO[c]||{},lbl=document.createElement("label");lbl.className="challenge-option"+(i===0?" selected":"");lbl.innerHTML='<input type="radio" name="challenge" value="'+c+'"'+(i===0?" checked":"")+'><div class="challenge-option-inner"><span class="co-name">'+E(c)+'</span><span class="co-desc">'+E(ci.desc||"")+'</span><div class="co-meta"><span class="co-tag">'+E(ci.asset||"?")+'</span><span class="co-tag">'+E(ci.metric||"?")+"</span></div></div>";lbl.addEventListener("click",function(){g.querySelectorAll(".challenge-option").forEach(function(o){o.classList.remove("selected")});lbl.classList.add("selected")});g.appendChild(lbl)})}();
+
+// Anthropic key
+function saveAntKey(){var inp=document.getElementById("ant-key-input"),k=inp.value.trim();if(!k)return;fetch("/api/anthropic-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key:k})}).then(function(r){return r.json()}).then(function(d){if(d.error){alert(d.error);return}if(d.set){renderAntS(true,d.masked);inp.value=""}})}
+function deleteAntKey(){fetch("/api/anthropic-key",{method:"DELETE"}).then(function(r){return r.json()}).then(function(){renderAntS(false,"")})}
+function renderAntS(isSet,masked){var s=document.getElementById("ant-status");if(isSet){s.innerHTML='<span class="badge badge-completed" style="font-size:11px;">'+E(masked)+'</span><button class="btn btn-sm btn-ghost" onclick="deleteAntKey()">Remove</button>'}else{s.innerHTML='<input id="ant-key-input" type="password" placeholder="sk-ant-..." style="flex:1;min-width:200px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:12px;"><button class="btn btn-sm" onclick="saveAntKey()">Save</button>'}}
+
+// CoinGlass
+function saveCgKey(){var inp=document.getElementById("cg-key-input"),k=inp.value.trim();if(!k)return;fetch("/api/coinglass-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key:k})}).then(function(r){return r.json()}).then(function(d){if(d.error){alert(d.error);return}if(d.set){renderCgS(true,d.masked);inp.value=""}}).catch(function(){})}
+function deleteCgKey(){fetch("/api/coinglass-key",{method:"DELETE"}).then(function(r){return r.json()}).then(function(){renderCgS(false,"")}).catch(function(){})}
+function renderCgS(isSet,masked){var s=document.getElementById("cg-status");if(isSet){s.innerHTML='<span class="badge badge-completed" style="font-size:11px;">'+E(masked)+'</span><button class="btn btn-sm btn-ghost" onclick="deleteCgKey()">Remove</button>'}else{s.innerHTML='<input id="cg-key-input" type="password" placeholder="CoinGlass key..." style="flex:1;min-width:200px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:12px;"><button class="btn btn-sm" onclick="saveCgKey()">Save</button>'}}
+
+// Data card
+var _fetchPoll=null;
+function loadDataStatus(){
+fetch("/api/data-cache").then(function(r){return r.json()}).then(function(d){
+var el=document.getElementById("data-status"),badge=document.getElementById("data-badge");
+if(!el)return;
+var c=d["60"];
+if(c&&c.cached){
+var parts=['<span class="badge badge-completed" style="font-size:10px;">'+c.assets+' assets</span>'];
+if(c.has_coinglass)parts.push('<span class="badge" style="font-size:10px;background:var(--accent-dim);color:var(--accent);">+CoinGlass</span>');
+else parts.push('<span class="badge" style="font-size:10px;background:var(--red-dim,rgba(255,50,50,.1));color:var(--red);">No CoinGlass</span>');
+parts.push('<span class="text-tertiary text-sm">'+c.age_hours+'h ago</span>');
+el.innerHTML=parts.join(" ");
+badge.innerHTML='<span class="badge badge-completed" style="font-size:9px;">CACHED</span>';
+}else{
+el.innerHTML='<span class="text-tertiary text-sm">No data cached. Fetch before launching agents.</span>';
+badge.innerHTML='<span class="badge badge-stopped" style="font-size:9px;">NOT CACHED</span>';
+}});
+fetch("/api/data-cache/status").then(function(r){return r.json()}).then(function(s){
+var prog=document.getElementById("data-progress"),
+    bar=document.getElementById("data-progress-bar"),
+    txt=document.getElementById("data-progress-text"),
+    btn=document.getElementById("data-fetch-btn");
+if(s.running){
+prog.style.display="";
+txt.textContent=s.progress;
+if(s.total_steps>0)bar.style.width=Math.round(100*s.step/s.total_steps)+"%";
+btn.disabled=true;btn.textContent="Fetching...";
+if(!_fetchPoll)_fetchPoll=setInterval(loadDataStatus,2000);
+}else{
+prog.style.display="none";
+btn.disabled=false;btn.textContent="Fetch Data";
+if(_fetchPoll){clearInterval(_fetchPoll);_fetchPoll=null}
+if(s.error){txt.textContent="Error: "+s.error;prog.style.display=""}
+}})}
+function startFetch(){
+var btn=document.getElementById("data-fetch-btn");
+btn.disabled=true;btn.textContent="Starting...";
+var cgKey=document.getElementById("data-cg-key").value.trim();
+var body={days_back:60};
+if(cgKey&&cgKey.indexOf("*")===-1)body.coinglass_key=cgKey;
+fetch("/api/data-cache/prefetch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){return r.json()}).then(function(){
+if(!_fetchPoll)_fetchPoll=setInterval(loadDataStatus,2000);
+loadDataStatus()}).catch(function(){btn.disabled=false;btn.textContent="Fetch Data"})}
+function deleteCache(){
+if(!confirm("Delete cached data?"))return;
+fetch("/api/data-cache/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days_back:60})}).then(function(){loadDataStatus()})}
+loadDataStatus();
+
+// Create form
+document.getElementById("create-form").addEventListener("submit",function(e){e.preventDefault();var btn=document.getElementById("launch-btn");btn.disabled=true;btn.textContent="Launching...";var fd=new FormData(this),body={};fd.forEach(function(v,k){body[k]=v});body.min_iterations=parseInt(body.min_iterations);body.max_iterations=parseInt(body.max_iterations);fetch("/api/agents",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){return r.json()}).then(function(d){if(d.id){refreshAll().then(function(){nav(d.id)})}else{alert(d.error||"Failed");btn.disabled=false;btn.textContent="Launch"}}).catch(function(){btn.disabled=false;btn.textContent="Launch"})});
+
+// Render agent list (works with both summary and full agent objects)
+function renderList(){var el=document.getElementById("agent-list");if(!AGENTS.length){el.innerHTML="";return}
+var h='<div class="section-header"><h2 style="font-size:18px;">Agents</h2><span class="text-tertiary text-sm">'+AGENTS.length+" total</span></div>";
+AGENTS.forEach(function(a){var cfg=a.config||{};var mi=minfo(cfg.challenge);
+var iters=a.iteration_count!=null?a.iteration_count:(a.iterations||[]).length;
+var best=null;
+if(a.last_metrics){var pk=mi.primary;best=a.last_metrics[pk]!=null?a.last_metrics[pk]:null}
+else{best=bestM(a)}
+var goal=(cfg.goal||"").substring(0,140),created=(a.created_at||"").substring(0,10);
+h+='<div class="agent-link" data-id="'+a.id+'"><div class="card agent-card"><div class="flex-between"><div class="flex" style="gap:10px;"><span class="agent-id">'+E(a.id)+'</span><span class="badge badge-'+E(a.status)+'">'+E(a.status)+'</span></div><span class="text-tertiary text-sm">'+E(cfg.challenge||"unknown")+'</span></div><p class="agent-goal">'+E(goal)+'</p><div class="agent-meta"><span>'+iters+' iterations</span><span class="sep"></span><span>'+E(cfg.model||"sonnet")+'</span><span class="sep"></span><span>'+created+"</span>";
+if(best!==null)h+='<span class="sep"></span><span class="agent-best">'+F(best)+"</span>";
+if(a.phase)h+='<span class="sep"></span><span style="color:var(--warning,orange);font-size:9px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle;">'+E(a.phase)+"</span>";
+else if(a.live_activity&&a.live_activity.length){var last=a.live_activity[a.live_activity.length-1];h+='<span class="sep"></span><span style="color:var(--accent);font-size:9px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle;">'+E(last)+"</span>"}
+h+="</div></div></div>"});
+el.innerHTML=h;el.querySelectorAll(".agent-link").forEach(function(lnk){lnk.addEventListener("click",function(){nav(lnk.dataset.id)})})}
+
+// Render agent detail
+var _activeTab="overview";
+function renderAgent(id){var a=_agentCache[id];if(!a){showDash();return}
+var cfg=a.config||{};var mi=minfo(cfg.challenge),its=a.iterations||[];
+var displayStatus=a.paused?"paused":a.status;
+
+var h='<span class="av-back" id="av-back">&lt; dashboard</span>';
+h+='<div class="flex-between mb-2"><div class="flex" style="gap:12px;"><h2>'+E(a.id)+'</h2><span class="badge badge-'+E(displayStatus)+'">'+E(displayStatus)+'</span></div>';
+h+='<div class="flex" style="gap:8px;">';
+if(a.status==="running"&&!a.paused)h+='<button class="btn btn-danger btn-sm" onclick="stopA(\''+a.id+'\')">Stop</button>';
+else if(a.paused)h+='<button class="btn btn-primary btn-sm" onclick="resumeAgent(\''+a.id+'\')">Resume</button><button class="btn btn-danger btn-sm" onclick="stopA(\''+a.id+'\')">Stop</button>';
+else h+='<button class="btn btn-sm" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(255,51,51,.15);" onclick="delA(\''+a.id+'\')">Delete</button>';
+h+='</div></div>';
+
+h+='<div class="agent-tabs">';
+var tabs=[{id:"overview",label:"Overview"},{id:"iterations",label:"Iterations",count:its.length},{id:"features",label:"Features"},{id:"deploy",label:"Deploy"},{id:"notes",label:"Notes"},{id:"chat",label:"Chat"}];
+tabs.forEach(function(t){
+h+='<button class="agent-tab'+(_activeTab===t.id?" active":"")+'" data-tab="'+t.id+'" onclick="switchAgentTab(\''+t.id+'\',\''+a.id+'\')">'+t.label;
+if(t.count!==undefined)h+='<span class="tab-count">('+t.count+')</span>';
+h+='</button>';
+});
+h+='</div>';
+
+h+='<div class="tab-panel'+(_activeTab==="overview"?" active":"")+'" id="tab-overview">';
+h+='<div class="card"><div class="meta-row">'+MI("Challenge",cfg.challenge)+MI("Metric",mi.label)+MI("Model",cfg.model||"sonnet")+MI("Progress",its.length+" / "+(cfg.max_iterations||"?"))+'</div>';
+h+='<p style="margin-top:10px;font-size:12px;color:var(--text-secondary);line-height:1.6;">'+E(cfg.goal||"")+'</p>';
+var _anyCustom=its.some(function(it){return it.custom_data_used});
+if(_anyCustom){var _cdIts=its.filter(function(it){return it.custom_data_used}).map(function(it){return it.iteration});
+var _cdFields=(its.find(function(it){return it.custom_data_fields&&it.custom_data_fields.length})||{}).custom_data_fields||[];
+h+='<div style="margin-top:10px;padding:10px 14px;background:rgba(245,158,11,0.1);border:1px solid #f59e0b;display:flex;align-items:flex-start;gap:10px;">';
+h+='<span style="font-size:18px;line-height:1;">&#9888;</span>';
+h+='<div><div style="font-weight:700;font-size:12px;color:#f59e0b;margin-bottom:4px;">CUSTOM DATA ACTIVE</div>';
+h+='<div style="font-size:11px;color:var(--text-secondary);line-height:1.5;">Iterations '+_cdIts.join(", ")+' use agent-supplied custom data. Causal alignment is NOT guaranteed for custom fields -- results may contain lookahead bias.</div>';
+if(_cdFields.length)h+='<div style="font-size:10px;color:var(--text-tertiary);margin-top:4px;font-family:var(--font-mono,monospace);">Fields: '+E(_cdFields.join(", "))+'</div>';
+h+='</div></div>';}
+if(a.status==="running")h+='<p class="text-sm" style="margin-top:6px;color:var(--text-tertiary);font-size:10px;">&gt; docker logs -f mantis-'+a.id+'</p>';
+h+='</div>';
+
+var pk=findPrimary(a),best=bestM(a);
+var totalCost=0,totalTokensIn=0,totalTokensOut=0,totalTime=0;
+its.forEach(function(it){
+if(it.tokens){totalTokensIn+=(it.tokens.input||0);totalTokensOut+=(it.tokens.output||0);if(it.tokens.cost)totalCost+=parseFloat(it.tokens.cost)||0}
+if(it.elapsed_s)totalTime+=it.elapsed_s;
+});
+h+='<div class="overview-grid">';
+if(best!==null)h+='<div class="stat-card"><div class="stat-card-label">Best '+pk+'</div><div class="stat-card-value">'+F(best)+'</div></div>';
+h+='<div class="stat-card"><div class="stat-card-label">Iterations</div><div class="stat-card-value">'+its.length+' <span style="font-size:11px;color:var(--text-tertiary);font-weight:400">/ '+(cfg.max_iterations||"?")+'</span></div></div>';
+if(totalCost>0)h+='<div class="stat-card"><div class="stat-card-label">Total Cost</div><div class="stat-card-value">$'+totalCost.toFixed(2)+'</div><div class="stat-card-sub">'+(totalTokensIn+totalTokensOut).toLocaleString()+' tokens</div></div>';
+if(totalTime>0){var mm=Math.floor(totalTime/60),ss=Math.round(totalTime%60);h+='<div class="stat-card"><div class="stat-card-label">Total Runtime</div><div class="stat-card-value">'+mm+'m '+ss+'s</div></div>'}
+h+='</div>';
+h+='<div class="card"><div class="flex-between" style="margin-bottom:4px;"><h3 style="margin-bottom:0;">Performance</h3><div class="metric-legend" id="av-legend"></div></div><div class="chart-container"><canvas id="av-chart"></canvas></div></div>';
+if(a.status==="running"&&!its.length){
+h+='<div class="card" style="padding:20px;">';
+h+='<div class="flex" style="gap:8px;align-items:center;margin-bottom:10px;"><div class="pulse-dot"></div><p style="font-size:12px;color:var(--text-secondary);">Running iteration 1...</p></div>';
+if(a.live_activity&&a.live_activity.length){h+='<div class="activity-box">';a.live_activity.slice(-15).forEach(function(line){h+='<span class="activity-item">'+E(line)+'</span>'});h+='</div>'}
+h+='</div>';
+}
+h+='</div>';
+
+h+='<div class="tab-panel'+(_activeTab==="iterations"?" active":"")+'" id="tab-iterations">';
+if(!its.length){
+h+='<div class="card" style="padding:20px;text-align:center;"><p class="text-muted">No iterations completed yet</p>';
+if(a.status==="running")h+='<p style="margin-top:6px;font-size:11px;color:var(--text-tertiary);">First iteration in progress...</p>';
+h+='</div>';
+}
+var sorted=[...its].reverse();
+sorted.forEach(function(it,idx){var isL=idx===0;
+h+='<div class="card iter-card'+(isL?" iter-latest":"")+'">';
+h+='<div class="flex-between"><div class="flex" style="gap:10px;"><span class="iter-num">'+it.iteration+'</span>';
+if(it.has_error)h+='<span class="badge badge-stopped">error</span>';
+else if(it.done_signal)h+='<span class="badge badge-completed">final</span>';
+else if(it._partial)h+='<span class="badge" style="background:var(--accent);color:var(--bg);font-size:9px;">eval done</span>';
+if(it.custom_data_used)h+='<span class="badge badge-custom-data" title="This iteration uses agent-supplied custom data. Results may not be comparable to standard runs.">CUSTOM DATA</span>';
+h+='</div><div class="flex" style="gap:10px;">';
+if(it.elapsed_s)h+='<span class="text-sm text-tertiary">'+it.elapsed_s+'s</span>';
+if(it.tokens)h+='<span class="text-sm text-tertiary" style="font-size:10px;">'+(it.tokens.input||0)+'in/'+(it.tokens.output||0)+'out'+(it.tokens.cost?' $'+it.tokens.cost:'')+'</span>';
+h+='<span class="text-sm text-tertiary">'+(it.timestamp||'').substring(0,16).replace('T',' ')+'</span></div></div>';
+if(it.activity&&it.activity.length){h+='<div class="activity-box">';it.activity.slice(-8).forEach(function(act){h+='<span class="activity-item">'+E(act)+'</span>'});if(it.activity.length>8)h+='<span class="activity-item" style="font-style:italic;">+'+(it.activity.length-8)+' more</span>';h+='</div>'}
+if(!it.has_error){var m=it.metrics||{};h+='<div class="pills">';
+var pv=m[pk];if(typeof pv==="number")h+='<div class="pill pill-accent"><span class="pill-label">'+pk+'</span><span class="pill-value">'+F(pv)+'</span></div>';
+h+='</div>'}
+var an=it.analysis;
+var _fr=an&&typeof an==="object"&&(an.feature_report||an.features);
+if(_fr&&_fr.length){h+='<div style="margin-top:8px;"><div class="feat-grid">';
+_fr.forEach(function(feat){h+='<div class="feat-card"><div class="feat-header"><span class="feat-name">'+E(feat.name||'?')+'</span>';if(feat.importance_rank)h+='<span class="feat-rank">#'+feat.importance_rank+'</span>';h+='</div>';
+if(feat.description)h+='<p class="feat-desc">'+E(feat.description)+'</p>';
+var fs=feat.stats;if(fs)h+='<div class="feat-stats"><span>&mu;='+F(fs.mean,3)+'</span><span>&sigma;='+F(fs.std,3)+'</span><span>min='+F(fs.min,3)+'</span><span>max='+F(fs.max,3)+'</span></div>';
+var pp=feat.predictive_power;if(pp)h+='<div class="feat-stats" style="margin-top:2px;"><span>'+E(pp.method||'')+'='+F(pp.value,4)+'</span>'+(pp.p_value!=null?'<span>p='+F(pp.p_value,4)+'</span>':'')+(pp.interpretation?'<span style="color:var(--text-secondary);">'+E(pp.interpretation)+'</span>':'')+'</div>';
+h+='</div>'});h+='</div></div>'}
+if(an&&typeof an==="object"){
+if(an.hypothesis)h+='<div class="insight-block insight-hypothesis" style="margin-top:8px;"><span class="insight-label">Hypothesis</span><p>'+E(an.hypothesis)+'</p></div>';
+var hasDetail=an.what_changed||an.what_worked||an.what_failed||an.expected_outcome||(an.log&&an.log.length);
+if(hasDetail){h+='<div style="margin-top:6px;"><button class="btn btn-sm" style="background:var(--surface-raised);color:var(--text-secondary);border:1px solid var(--border);font-size:10px;" onclick="toggleEl(\'detail-'+it.iteration+'\')">Analysis details</button>';
+h+='<div id="detail-'+it.iteration+'" style="display:none;margin-top:6px;">';
+if(an.log&&an.log.length){h+='<div class="notes-box">';an.log.forEach(function(n){h+='<div class="note-line"><span class="note-dot"></span><span>'+E(n)+'</span></div>'});h+='</div>'}
+if(an.what_changed)h+='<div class="insight-block"><span class="insight-label">Changes</span><p>'+E(an.what_changed)+'</p></div>';
+h+='<div class="insight-pair">';
+if(an.what_worked)h+='<div class="insight-block insight-positive"><span class="insight-label">Worked</span><p>'+E(an.what_worked)+'</p></div>';
+if(an.what_failed)h+='<div class="insight-block insight-negative"><span class="insight-label">Failed</span><p>'+E(an.what_failed)+'</p></div>';
+h+='</div>';
+if(an.expected_outcome)h+='<div class="insight-block"><span class="insight-label">Expected</span><p class="text-sm">'+E(an.expected_outcome)+'</p></div>';
+h+='</div></div>'}}
+if(it.agent_notes&&!(an&&typeof an==="object"&&an.log))h+='<div class="notes-box" style="margin-top:8px;"><div class="note-line" style="white-space:pre-wrap;">'+E((it.agent_notes||'').substring(0,1000))+'</div></div>';
+if(it.has_error)h+='<div class="error-box"><span>'+E(((it.metrics||{}).error||'').substring(0,500))+'</span></div>';
+var hasCds=false;if(!it.has_error){var cds=[];Object.entries(it.metrics||{}).forEach(function(kv){if(kv[0].startsWith("dev_emb_dim_")&&kv[0].endsWith("_corr"))cds.push({dim:kv[0].replace("dev_emb_dim_","").replace("_corr",""),corr:kv[1]})});hasCds=cds.length>0}
+h+='<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;">';
+if(hasCds)h+='<button class="btn btn-sm" style="background:var(--surface-raised);color:var(--text-secondary);border:1px solid var(--border);font-size:10px;" onclick="toggleEl(\'emb-'+it.iteration+'\')">Embedding Corr</button>';
+if(it.code_path)h+='<button class="btn btn-sm" style="background:var(--surface-raised);color:var(--text-secondary);border:1px solid var(--border);font-size:10px;" onclick="toggleCode('+it.iteration+',\''+a.id+'\')">Code</button>';
+if(it.result_text)h+='<button class="btn btn-sm" style="background:var(--surface-raised);color:var(--text-secondary);border:1px solid var(--border);font-size:10px;" onclick="toggleEl(\'r-'+it.iteration+'\')">Output</button>';
+if(it.thoughts&&it.thoughts.length)h+='<button class="btn btn-sm" style="background:var(--surface-raised);color:var(--text-secondary);border:1px solid var(--border);font-size:10px;" onclick="toggleEl(\'th-'+it.iteration+'\')">Thoughts ('+it.thoughts.length+')</button>';
+h+='</div>';
+if(hasCds){h+='<div id="emb-'+it.iteration+'" style="display:none;margin-top:6px;"><div class="corr-bars">';cds.forEach(function(cd){var ab=Math.abs(cd.corr),col=cd.corr>0?"var(--green)":"var(--red)";h+='<div class="corr-row"><span class="corr-label">'+cd.dim+'</span><div class="corr-track"><div class="corr-fill" style="width:'+Math.min(ab*400,100)+'%;background:'+col+';opacity:'+(0.4+ab*0.6)+';"></div></div><span class="corr-val" style="color:'+col+';">'+F(cd.corr)+'</span></div>'});h+='</div></div>'}
+if(it.code_path)h+='<div id="code-'+it.iteration+'" style="display:none;margin-top:8px;"><pre id="cc-'+it.iteration+'">Loading...</pre></div>';
+if(it.result_text)h+='<div id="r-'+it.iteration+'" style="display:none;margin-top:8px;"><pre style="white-space:pre-wrap;word-break:break-word;">'+E((it.result_text||'').substring(0,5000))+'</pre></div>';
+if(it.thoughts&&it.thoughts.length){h+='<div id="th-'+it.iteration+'" style="display:none;margin-top:8px;"><div class="thoughts-box">';it.thoughts.forEach(function(t){h+='<div class="thought-block">'+E(t)+'</div>'});h+='</div></div>'}
+h+='</div>'});
+h+='</div>';
+
+
+h+='<div class="tab-panel'+(_activeTab==="features"?" active":"")+'" id="tab-features">';
+h+=buildFeaturesTab(a);
+h+='</div>';
+
+h+='<div class="tab-panel'+(_activeTab==="deploy"?" active":"")+'" id="tab-deploy">';
+h+=buildDeployTab(a);
+h+='</div>';
+
+h+='<div class="tab-panel'+(_activeTab==="notes"?" active":"")+'" id="tab-notes">';
+if(a.state_md){
+h+='<div class="card"><h3 style="margin-bottom:8px;">STATE.md</h3>';
+h+='<p class="text-sm text-tertiary" style="margin-bottom:8px;">Persistent memory the agent maintains across iterations</p>';
+h+='<div class="state-md-block">'+E(a.state_md)+'</div></div>';
+}
+if(a.agent_notes){
+h+='<div class="card"><h3 style="margin-bottom:8px;">Agent Notes</h3>';
+h+='<p class="text-sm text-tertiary" style="margin-bottom:8px;">Free-form notes the agent writes during execution</p>';
+h+='<pre class="notes-pre">'+E(a.agent_notes)+'</pre></div>';
+}
+if(!a.state_md&&!a.agent_notes){
+h+='<div class="card" style="padding:20px;text-align:center;"><p class="text-muted">No notes or state yet. The agent writes here as it works.</p></div>';
+}
+h+='</div>';
+
+h+='<div class="tab-panel'+(_activeTab==="chat"?" active":"")+'" id="tab-chat">';
+h+=buildChatCard(a);
+h+='</div>';
+
+var view=document.getElementById("agent-view");view.innerHTML=h;
+view.querySelector("#av-back").addEventListener("click",function(){nav(null)});
+requestAnimationFrame(function(){renderChart(a,mi)});
+
+if(pollTimer)clearInterval(pollTimer);
+if(a.status==="running"||a.paused){var pollMs=3000;
+pollTimer=setInterval(function(){
+fetch("/api/agents/"+id).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(u){
+if(!u||currentAgentId!==id)return;
+var changed=false;
+if(u.status!=="running"&&!u.paused)changed=true;
+else if((u.iterations||[]).length>its.length)changed=true;
+else{
+var oldNotes=a.agent_notes||"",newNotes=u.agent_notes||"";
+var oldState=a.state_md||"",newState=u.state_md||"";
+if(oldNotes!==newNotes||oldState!==newState)changed=true;
+if(!changed){var uChat=(u.chat||[]),aChat=(a.chat||[]);if(uChat.length!==aChat.length)changed=true}
+if(!changed){var uLast=(u.iterations||[]).slice(-1)[0],aLast=its.slice(-1)[0];
+if(uLast&&aLast&&uLast._partial&&!aLast.analysis&&uLast.analysis)changed=true;
+if(uLast&&!aLast)changed=true}}
+if(changed){_agentCache[id]=u;renderAgent(id)}
+})},pollMs)}
+}
+
+function switchAgentTab(tabId,agentId){
+_activeTab=tabId;
+document.querySelectorAll(".agent-tab").forEach(function(t){t.classList.toggle("active",t.dataset.tab===tabId)});
+document.querySelectorAll(".tab-panel").forEach(function(p){p.classList.toggle("active",p.id==="tab-"+tabId)});
+if(tabId==="overview")requestAnimationFrame(function(){var a=_agentCache[agentId];if(a)renderChart(a,minfo((a.config||{}).challenge))});
+}
+
+
+function MI(l,v){return'<div class="meta-item"><span class="meta-label">'+l+'</span><span class="meta-value">'+E(String(v))+"</span></div>"}
+
+function renderChart(a,mi){
+var el=document.getElementById("av-chart");
+if(!el)return;
+if(typeof Chart==="undefined"){setTimeout(function(){renderChart(a,mi)},500);return;}
+if(agentChart){agentChart.destroy();agentChart=null}
+
+var SKIP={"n_timesteps":1,"n_valid":1,"horizon":1,"n_events":1,"n_scored":1,"n_assets":1,"n_evaluated":1,"windows":1,"dev_length":1,"eval_holdout_minutes":1};
+var primary=findPrimary(a);
+var primaryData=[];
+(a.iterations||[]).forEach(function(it){
+    if(it.has_error)return;
+    var v=(it.metrics||{})[primary];
+    if(typeof v==="number")primaryData.push({x:it.iteration,y:v});
+});
+
+var P=window.__chartPalette||["#00ff41","#00cc33","#33ff66","#ffaa00","#ff3333","#00ff88","#66ff99","#88ffbb"];
+var hasData=primaryData.length>0;
+var c=P[0];
+var ds=[{label:primary,data:primaryData,borderColor:c,
+        backgroundColor:c+"18",
+        borderWidth:2.5,fill:true,tension:.35,
+        pointRadius:4,pointBackgroundColor:c,
+        pointBorderColor:"transparent",yAxisID:"y"}];
+var cs=getComputedStyle(document.documentElement);
+var gc=cs.getPropertyValue("--border").trim()||"rgba(255,255,255,.06)";
+var tc=cs.getPropertyValue("--text-tertiary").trim()||"rgba(255,255,255,.3)";
+var ac=cs.getPropertyValue("--accent").trim()||"#00ff41";
+var bgc=cs.getPropertyValue("--bg").trim()||"#000";
+var tsc=cs.getPropertyValue("--text-secondary").trim()||"#888";
+var rd=parseInt(cs.getPropertyValue("--radius-sm"))||1;
+
+var scaleOpts={
+    x:{type:"linear",grid:{color:gc},
+       ticks:{color:tc,stepSize:1,font:{size:11,family:"monospace"}},
+       title:{display:true,text:"Iteration",color:tc,font:{size:11,family:"monospace"}}},
+    y:{position:"left",grid:{color:gc},
+       ticks:{color:tc,font:{size:11,family:"monospace"}}}
+};
+if(!hasData){
+    scaleOpts.x.min=0;scaleOpts.x.max=5;
+    scaleOpts.y.min=0;scaleOpts.y.max=1;
+    scaleOpts.y.ticks.callback=function(){return""};
+    scaleOpts.x.ticks.callback=function(){return""};
+}
+
+agentChart=new Chart(el,{type:"line",data:{datasets:ds},
+options:{responsive:true,maintainAspectRatio:false,
+    animation:{duration:400},
+    interaction:{mode:"index",intersect:false},
+    plugins:{legend:{display:false},
+        tooltip:{enabled:hasData,
+            backgroundColor:bgc+"ee",borderColor:gc,borderWidth:1,
+            titleFont:{size:11,family:"monospace"},
+            bodyFont:{family:"monospace",size:10},
+            titleColor:ac,bodyColor:tsc,
+            padding:8,cornerRadius:rd,
+            callbacks:{label:function(c){return c.dataset.label+": "+c.parsed.y.toFixed(4)}}
+        }
+    },
+    scales:scaleOpts
+}});
+
+var le=document.getElementById("av-legend");
+if(le){le.innerHTML="";
+    var it=document.createElement("div");it.className="legend-item";
+    it.innerHTML='<div class="legend-swatch" style="background:'+c+'"></div>'+primary;
+    le.appendChild(it);
+}
+}
+
+function _pvalBadge(p){
+if(p<0.001)return'<span class="pval-badge pval-sig3">p&lt;.001</span>';
+if(p<0.01)return'<span class="pval-badge pval-sig2">p&lt;.01</span>';
+if(p<0.05)return'<span class="pval-badge pval-sig1">p&lt;.05</span>';
+return'<span class="pval-badge pval-ns">ns</span>';
+}
+function _corrBar(v){
+var w=Math.min(Math.abs(v)*600,80);
+var col=v>0?"var(--green)":"var(--red)";
+return'<span class="corr-bar-inline" style="width:'+w+'px;background:'+col+';"></span>';
+}
+var _deployCodeCache={};
+var _deploySelectedIter=null;
+function buildDeployTab(a){
+var its=a.iterations||[];
+if(!its.length)return'<div class="card" style="padding:20px;text-align:center;"><p class="text-muted">No iterations yet -- strategy code appears after the first evaluation.</p></div>';
+var selIter=_deploySelectedIter;
+if(!selIter){
+for(var i=its.length-1;i>=0;i--){var _an=its[i].analysis;if(_an&&(_an.inference_spec||_an.feature_report)){selIter=its[i].iteration;break}}
+if(!selIter)selIter=its[its.length-1].iteration;
+}
+var sel=its.find(function(it){return it.iteration===selIter})||its[its.length-1];
+var an=sel.analysis||{};
+var spec=an.inference_spec||null;
+
+var h='<div class="card"><div class="flex-between" style="margin-bottom:12px;"><div>';
+h+='<h3 style="margin-bottom:2px;">Strategy Code &amp; Inference Spec</h3>';
+h+='<p class="text-sm text-tertiary">Featurizer + predictor code and what the strategy needs for live deployment</p>';
+h+='</div>';
+if(its.length>1){
+h+='<select class="feat-iter-select" onchange="switchDeployIter(this.value,\''+a.id+'\')">';
+its.slice().reverse().forEach(function(it){var hasSpec=it.analysis&&it.analysis.inference_spec;h+='<option value="'+it.iteration+'"'+(it.iteration===selIter?' selected':'')+'>Iter '+it.iteration+(hasSpec?' \u2713':'')+'</option>'});
+h+='</select>';
+}
+h+='</div>';
+
+if(spec){
+h+='<div style="margin-bottom:16px;">';
+if(spec.summary){
+h+='<div style="background:var(--surface-raised);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:12px;">';
+h+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:6px;">Strategy Summary</div>';
+h+='<p style="font-size:12px;line-height:1.7;color:var(--text-primary);margin:0;">'+E(spec.summary)+'</p></div>';
+}
+if(spec.data_requirements&&spec.data_requirements.length){
+h+='<div style="background:var(--surface-raised);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:12px;">';
+h+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:8px;">Data Requirements</div>';
+h+='<table class="feat-table"><thead><tr><th>Field</th><th>Source</th><th>Granularity</th><th>Lookback</th><th>Description</th></tr></thead><tbody>';
+spec.data_requirements.forEach(function(dr){
+h+='<tr><td style="font-weight:700;color:var(--accent);">'+E(dr.field||"?")+'</td>';
+h+='<td>'+E(dr.source||"")+'</td>';
+h+='<td>'+E(dr.granularity||"")+'</td>';
+h+='<td>'+E(dr.lookback||"")+'</td>';
+h+='<td style="font-size:10px;max-width:250px;white-space:normal;">'+E(dr.description||"")+'</td></tr>';
+});
+h+='</tbody></table></div>';
+}
+var metaItems=[];
+if(spec.update_frequency)metaItems.push(["Update Frequency",spec.update_frequency]);
+if(spec.latency_sensitivity)metaItems.push(["Latency",spec.latency_sensitivity]);
+if(spec.output_format)metaItems.push(["Output Format",spec.output_format]);
+if(spec.dependencies&&spec.dependencies.length)metaItems.push(["Dependencies",spec.dependencies.join(", ")]);
+if(metaItems.length){
+h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-bottom:12px;">';
+metaItems.forEach(function(m){
+h+='<div style="background:var(--surface-raised);border:1px solid var(--border);border-radius:6px;padding:10px;">';
+h+='<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-tertiary);margin-bottom:4px;">'+E(m[0])+'</div>';
+h+='<div style="font-size:12px;color:var(--text-primary);">'+E(m[1])+'</div></div>';
+});
+h+='</div>';
+}
+h+='</div>';
+}else{
+h+='<div style="background:var(--surface-raised);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:16px;text-align:center;">';
+h+='<p class="text-sm text-tertiary">No inference spec for this iteration. The agent writes this in its analysis JSON.</p></div>';
+}
+
+h+='<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:8px;">Strategy Code (iteration '+selIter+')</div>';
+var cacheKey=a.id+"-"+selIter;
+var cached=_deployCodeCache[cacheKey];
+if(cached){
+h+='<div style="position:relative;"><button class="btn btn-sm" style="position:absolute;top:8px;right:8px;z-index:1;background:var(--surface-raised);border:1px solid var(--border);font-size:10px;padding:3px 8px;" onclick="copyDeployCode(\''+cacheKey+'\')">Copy</button>';
+h+='<pre class="notes-pre" style="max-height:600px;overflow-y:auto;font-size:11px;line-height:1.5;padding:12px;" id="deploy-code-'+cacheKey+'">'+E(cached)+'</pre></div>';
+}else{
+h+='<div id="deploy-code-placeholder-'+cacheKey+'" style="background:var(--surface-raised);border:1px solid var(--border);border-radius:6px;padding:20px;text-align:center;">';
+h+='<p class="text-sm text-tertiary">Loading code...</p></div>';
+setTimeout(function(){fetchDeployCode(a.id,selIter)},0);
+}
+h+='</div>';
+return h;
+}
+function fetchDeployCode(agentId,iter){
+var cacheKey=agentId+"-"+iter;
+fetch("/api/agents/"+agentId+"/code/"+iter).then(function(r){
+if(!r.ok)throw new Error("No code for iteration "+iter);
+return r.text()}).then(function(code){
+_deployCodeCache[cacheKey]=code;
+var ph=document.getElementById("deploy-code-placeholder-"+cacheKey);
+if(ph){
+var h='<div style="position:relative;"><button class="btn btn-sm" style="position:absolute;top:8px;right:8px;z-index:1;background:var(--surface-raised);border:1px solid var(--border);font-size:10px;padding:3px 8px;" onclick="copyDeployCode(\''+cacheKey+'\')">Copy</button>';
+h+='<pre class="notes-pre" style="max-height:600px;overflow-y:auto;font-size:11px;line-height:1.5;padding:12px;" id="deploy-code-'+cacheKey+'">'+E(code)+'</pre></div>';
+ph.outerHTML=h;
+}
+}).catch(function(err){
+var ph=document.getElementById("deploy-code-placeholder-"+cacheKey);
+if(ph)ph.innerHTML='<p class="text-sm" style="color:var(--red);">'+E(String(err))+'</p>';
+});
+}
+function copyDeployCode(cacheKey){
+var code=_deployCodeCache[cacheKey];
+if(!code)return;
+navigator.clipboard.writeText(code).then(function(){
+var btn=event.target;btn.textContent="Copied!";setTimeout(function(){btn.textContent="Copy"},1500);
+});
+}
+function switchDeployIter(iter,agentId){
+_deploySelectedIter=parseInt(iter);
+renderAgent(agentId);
+}
+
+var _featSort={col:"importance_rank",asc:true};
+function buildFeaturesTab(a){
+var its=a.iterations||[];
+if(!its.length)return'<div class="card" style="padding:20px;text-align:center;"><p class="text-muted">No iterations yet -- feature reports appear after the agent writes its analysis.</p></div>';
+var selIter=_featSelectedIter;
+if(!selIter){
+for(var i=its.length-1;i>=0;i--){var _an=its[i].analysis;if(_an&&(_an.feature_report||_an.features)){selIter=its[i].iteration;break}}
+if(!selIter)selIter=its[its.length-1].iteration;
+}
+var sel=its.find(function(it){return it.iteration===selIter})||its[its.length-1];
+var an=sel.analysis;
+var feats=(an&&typeof an==="object")?(an.feature_report||an.features||[]):[];
+if(!feats.length)return'<div class="card" style="padding:20px;text-align:center;"><p class="text-muted">No feature report for this iteration. The agent writes feature reports in its analysis JSON.</p></div>';
+var rows=feats.map(function(f){return{name:f.name||"?",desc:f.description||"",signal:f.signal||"",rank:f.importance_rank||999,stats:f.stats||null,pp:f.predictive_power||null,raw:f}});
+rows.sort(function(a,b){
+var va,vb;
+if(_featSort.col==="name"){va=a.name;vb=b.name;return _featSort.asc?va.localeCompare(vb):vb.localeCompare(va)}
+if(_featSort.col==="importance_rank"){va=a.rank;vb=b.rank}
+else if(_featSort.col==="value"){va=Math.abs(a.pp?a.pp.value||0:0);vb=Math.abs(b.pp?b.pp.value||0:0)}
+else if(_featSort.col==="p_value"){va=a.pp?a.pp.p_value:1;vb=b.pp?b.pp.p_value:1;if(va==null)va=1;if(vb==null)vb=1}
+else if(_featSort.col==="mean"){va=a.stats?Math.abs(a.stats.mean||0):0;vb=b.stats?Math.abs(b.stats.mean||0):0}
+else if(_featSort.col==="std"){va=a.stats?a.stats.std||0:0;vb=b.stats?b.stats.std||0:0}
+else{va=0;vb=0}
+if(_featSort.asc)return va<vb?-1:va>vb?1:0;
+return va>vb?-1:va<vb?1:0;
+});
+var h='<div class="card"><div class="flex-between" style="margin-bottom:10px;"><div>';
+h+='<h3 style="margin-bottom:2px;">Feature Report</h3>';
+h+='<p class="text-sm text-tertiary">Agent-written analysis of '+rows.length+' features (iteration '+selIter+')</p>';
+h+='</div>';
+if(its.length>1){
+h+='<select class="feat-iter-select" onchange="switchFeatIter(this.value,\''+a.id+'\')">';
+its.slice().reverse().forEach(function(it){var hasFr=it.analysis&&(it.analysis.feature_report||it.analysis.features);h+='<option value="'+it.iteration+'"'+(it.iteration===selIter?' selected':'')+'>Iter '+it.iteration+(hasFr?' \u2713':'')+'</option>'});
+h+='</select>';
+}
+h+='</div>';
+h+='<div style="overflow-x:auto;">';
+h+='<table class="feat-table"><thead><tr>';
+var cols=[{id:"importance_rank",label:"#"},{id:"name",label:"Feature"},{id:"desc",label:"Description / Signal"}];
+cols.push({id:"mean",label:"Mean"},{id:"std",label:"Std"});
+cols.push({id:"value",label:"Pred. Power"},{id:"p_value",label:"P-value"});
+cols.forEach(function(c){
+var sorted=_featSort.col===c.id;
+var arrow=sorted?(_featSort.asc?"\u25B2":"\u25BC"):"\u25B2";
+h+='<th class="'+(sorted?"sorted":"")+'" onclick="sortFeats(\''+c.id+'\',\''+a.id+'\')">'+c.label+'<span class="sort-arrow">'+arrow+'</span></th>';
+});
+h+='</tr></thead><tbody>';
+rows.forEach(function(r){
+h+='<tr>';
+h+='<td style="text-align:center;font-weight:700;color:var(--accent);">'+r.rank+'</td>';
+h+='<td class="feat-name-cell">'+E(r.name)+'</td>';
+var descSig=r.desc;if(r.signal)descSig+=(descSig?' — ':'')+r.signal;
+h+='<td style="max-width:300px;white-space:normal;font-size:10px;">'+E(descSig)+'</td>';
+if(r.stats){
+h+='<td>'+F(r.stats.mean,4)+'</td>';
+h+='<td>'+F(r.stats.std,4)+'</td>';
+}else{h+='<td>—</td><td>—</td>'}
+if(r.pp){
+var ppLabel=r.pp.method?E(r.pp.method)+': ':'';
+h+='<td>'+ppLabel+F(r.pp.value,4)+'</td>';
+var pv=r.pp.p_value;
+if(pv!=null){var pcls=pv<0.001?"pval-sig3":pv<0.01?"pval-sig2":pv<0.05?"pval-sig1":"";h+='<td><span class="pval-badge '+pcls+'">'+F(pv,4)+'</span></td>'}
+else{h+='<td>—</td>'}
+}else{h+='<td>—</td><td>—</td>'}
+if(r.pp&&r.pp.interpretation){h+='</tr><tr><td></td><td colspan="6" style="font-size:10px;color:var(--text-tertiary);padding-top:0;border-bottom:none;">'+E(r.pp.interpretation)+'</td>'}
+h+='</tr>';
+});
+h+='</tbody></table></div></div>';
+return h;
+}
+function sortFeats(col,agentId){
+if(_featSort.col===col)_featSort.asc=!_featSort.asc;
+else{_featSort.col=col;_featSort.asc=col==="p_value"||col==="importance_rank"||col==="name"}
+renderAgent(agentId);
+}
+function switchFeatIter(iter,agentId){
+var a=_agentCache[agentId];
+if(!a)return;
+_featSelectedIter=parseInt(iter);
+renderAgent(agentId);
+}
+var _featSelectedIter=null;
+
+function buildChatCard(a){
+var msgs=a.chat||[];
+var agentMsgs=msgs.filter(function(m){return m.type==="message"||!m.type});
+
+var h='<div class="card" style="margin-bottom:0;"><h3 style="margin-bottom:6px;font-size:13px;">Message Agent</h3>';
+h+='<p class="text-sm text-tertiary" style="margin-bottom:6px;">Send a message to INBOX.md -- the agent reads it at the start of its next iteration.</p>';
+h+='<div class="chat-container" id="msg-messages" style="max-height:400px;">';
+if(!agentMsgs.length)h+='<div style="padding:8px;text-align:center;font-size:10px;color:var(--text-tertiary);">No messages sent</div>';
+agentMsgs.forEach(function(m){
+var cls="chat-msg chat-msg-"+m.role;
+var roleLabel=m.role==="user"?"you":m.role;
+var ts=(m.ts||"").substring(11,16);
+h+='<div class="'+cls+'"><span class="chat-role">'+roleLabel+'</span><span class="chat-text">'+E(m.text)+'</span><span class="chat-ts">'+ts+'</span></div>';
+});
+h+='</div>';
+h+='<div class="chat-input-row">';
+h+='<textarea id="msg-input" placeholder="Message the agent..." rows="1" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendMsg(\''+a.id+'\')}"></textarea>';
+h+='<button class="btn btn-sm" style="background:var(--surface-raised);color:var(--text-secondary);border:1px solid var(--border);" onclick="sendMsg(\''+a.id+'\')">Send</button></div>';
+h+='</div>';
+return h;
+}
+
+function sendMsg(agentId){
+var inp=document.getElementById("msg-input");
+var text=(inp.value||"").trim();
+if(!text)return;
+inp.value="";inp.disabled=true;
+fetch("/api/agents/"+agentId+"/message",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:text})})
+.then(function(r){return r.json()})
+.then(function(){return refreshAll()})
+.then(function(){renderAgent(agentId)})
+.finally(function(){inp.disabled=false});
+}
+
+function resumeAgent(agentId){
+fetch("/api/agents/"+agentId+"/resume",{method:"POST"})
+.then(function(){return refreshAll()})
+.then(function(){renderAgent(agentId)});
+}
+
+function stopA(id){if(!confirm("Stop this agent?"))return;fetch("/api/agents/"+id+"/stop",{method:"POST"}).then(function(){return refreshAll()}).then(function(){renderAgent(id)})}
+function delA(id){if(!confirm("Delete this agent and all its data?"))return;fetch("/api/agents/"+id+"/delete",{method:"POST"}).then(function(){return refreshAll()}).then(function(){nav(null)})}
+function toggleCode(iter,aid){var r=document.getElementById("code-"+iter),c=document.getElementById("cc-"+iter);if(r.style.display==="none"){r.style.display="block";if(c.textContent==="Loading...")fetch("/api/agents/"+aid+"/code/"+iter).then(function(r){return r.ok?r.text():"Not found"}).then(function(t){c.textContent=t})}else r.style.display="none"}
+function toggleEl(id){var el=document.getElementById(id);if(el)el.style.display=el.style.display==="none"?"block":"none"}
+
+var _agentsEtag="";
+function refreshAll(){return fetch("/api/agents",{headers:_agentsEtag?{"If-None-Match":_agentsEtag}:{}}).then(function(r){if(r.status===304)return null;if(!r.ok)throw new Error(r.status);_agentsEtag=r.headers.get("ETag")||"";return r.json()}).then(function(d){if(d)AGENTS=d}).catch(function(){})}
+
+function setNavActive(view){document.querySelectorAll(".nav-tab").forEach(function(t){t.classList.toggle("nav-active",t.dataset.view===view)})}
+function hideAll(){["dash-view","agent-view","settings-view","guide-view"].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display="none"})}
+function nav(agentId){if(agentId){currentView="agent";currentAgentId=agentId;history.pushState({a:agentId,v:"agent"},"","/agent/"+agentId);showAg(agentId)}else{currentView="dashboard";currentAgentId=null;history.pushState({a:null,v:"dashboard"},"","/");showDash()}}
+function showDash(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}if(agentChart){agentChart.destroy();agentChart=null}currentView="dashboard";hideAll();document.getElementById("dash-view").style.display="";setNavActive("dashboard");renderList();startPoll()}
+var _agentCache={};
+function showAg(id){currentView="agent";currentAgentId=id;hideAll();document.getElementById("agent-view").style.display="";setNavActive("dashboard");
+var view=document.getElementById("agent-view");
+if(_agentCache[id]){renderAgent(id);return}
+view.innerHTML='<div style="padding:40px;text-align:center;color:var(--text-tertiary);">Loading agent '+E(id)+'...</div>';
+fetch("/api/agents/"+id).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(a){_agentCache[id]=a;renderAgent(id)}).catch(function(err){view.innerHTML='<div style="padding:40px;text-align:center;"><p style="color:var(--red);">Failed to load agent '+E(id)+'</p><p class="text-sm text-tertiary" style="margin-top:8px;">'+E(String(err))+'</p><button class="btn btn-sm" onclick="nav(null)" style="margin-top:16px;">Back to dashboard</button></div>'})}
+function showSettings(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}if(agentChart){agentChart.destroy();agentChart=null}currentView="settings";currentAgentId=null;hideAll();document.getElementById("settings-view").style.display="";setNavActive("settings")}
+function showGuide(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}if(agentChart){agentChart.destroy();agentChart=null}currentView="guide";currentAgentId=null;hideAll();document.getElementById("guide-view").style.display="";setNavActive("guide")}
+function startPoll(){if(pollTimer)clearInterval(pollTimer);if(!AGENTS.some(function(a){return a.status==="running"}))return;pollTimer=setInterval(function(){if(currentView!=="dashboard")return;refreshAll().then(function(){renderList()})},10000)}
+document.getElementById("nav-dash").addEventListener("click",function(e){e.preventDefault();nav(null)});
+document.getElementById("nav-settings").addEventListener("click",function(e){e.preventDefault();history.pushState({v:"settings"},"","/#settings");showSettings()});
+document.getElementById("nav-guide").addEventListener("click",function(e){e.preventDefault();history.pushState({v:"guide"},"","/#guide");showGuide()});
+window.addEventListener("popstate",function(e){var s=e.state||{};if(s.v==="settings")showSettings();else if(s.v==="guide")showGuide();else if(s.a)showAg(s.a);else showDash()});
+
+!function(){var p=window.location.pathname,h=window.location.hash,m=p.match(/^\/agent\/([^/]+)/);if(m){currentView="agent";currentAgentId=m[1];history.replaceState({a:m[1],v:"agent"},"");renderList();showAg(m[1])}else if(h==="#guide"){currentView="guide";history.replaceState({v:"guide"},"");renderList();showGuide()}else if(h==="#settings"){currentView="settings";history.replaceState({v:"settings"},"");renderList();showSettings()}else{currentView="dashboard";history.replaceState({a:null,v:"dashboard"},"");renderList();startPoll()}}();
+
+setTimeout(function(){
+var q=AGENTS.slice(),i=0;
+function next(){if(i>=q.length)return;var id=q[i++].id;if(_agentCache[id]){next();return}
+fetch("/api/agents/"+id).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(a){if(a)_agentCache[id]=a}).catch(function(){}).finally(next)}
+next();
+},100);
+
+function initNN(){
+var canvas=document.getElementById("nn-canvas");
+if(!canvas)return;
+if(typeof THREE==="undefined"){window.__nnInit=initNN;return;}
+var W=canvas.clientWidth||canvas.parentElement.clientWidth||800,H=canvas.clientHeight||340;
+var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.setSize(W,H);
+var scene=new THREE.Scene();
+var camera=new THREE.PerspectiveCamera(42,W/H,0.1,200);
+camera.position.set(0,3,13);
+camera.lookAt(0.8,0,0);
+
+function nnColor(){
+    return new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#ffffff");
+}
+
+var LY=[36,28,22,16,12,8,5,3,1];
+var LR=[2.5,2.1,1.7,1.3,0.95,0.65,0.38,0.16,0];
+var LX=[],tLen=11;
+for(var i=0;i<LY.length;i++)LX.push(-tLen/2+i*(tLen/(LY.length-1)));
+var nodePos=[],layerOff=[0],nodeMeta=[];
+for(var li=0;li<LY.length;li++){
+    for(var ni=0;ni<LY[li];ni++){
+        var a=(ni/LY[li])*Math.PI*2+li*0.2;
+        nodePos.push(new THREE.Vector3(LX[li],Math.cos(a)*LR[li],Math.sin(a)*LR[li]));
+        nodeMeta.push({ph:Math.random()*6.28,fr:0.3+Math.random()*0.5,am:0.015+Math.random()*0.02});
+    }
+    layerOff.push(layerOff[li]+LY[li]);
+}
+var nc=nnColor();
+var nPos=new Float32Array(nodePos.length*3);
+for(var i=0;i<nodePos.length;i++){nPos[i*3]=nodePos[i].x;nPos[i*3+1]=nodePos[i].y;nPos[i*3+2]=nodePos[i].z}
+var nGeo=new THREE.BufferGeometry();nGeo.setAttribute("position",new THREE.BufferAttribute(nPos,3));
+var nMat=new THREE.PointsMaterial({color:nc,size:0.035,sizeAttenuation:true,transparent:true,opacity:0.5});
+var nCloud=new THREE.Points(nGeo,nMat);
+
+var eV=[];
+for(var li=0;li<LY.length-1;li++){
+    var n1=LY[li],n2=LY[li+1],o1=layerOff[li],o2=layerOff[li+1];
+    for(var a=0;a<n1;a++){
+        var c2=Math.min(n2,Math.max(1,Math.ceil(n2*0.4)));
+        for(var c=0;c<c2;c++){var b=Math.floor((a*n2/n1+c)%n2);
+            eV.push(nodePos[o1+a].x,nodePos[o1+a].y,nodePos[o1+a].z,nodePos[o2+b].x,nodePos[o2+b].y,nodePos[o2+b].z)}
+    }
+}
+var eGeo=new THREE.BufferGeometry();eGeo.setAttribute("position",new THREE.BufferAttribute(new Float32Array(eV),3));
+var eMat=new THREE.LineBasicMaterial({color:nc,transparent:true,opacity:0.04});
+var eMesh=new THREE.LineSegments(eGeo,eMat);
+
+var NSIG=LY[0],TAIL=8,SURVIVE=0.93;
+var TRAVEL_T=0.7,DWELL_T=0.2,FADE_T=0.4,WAVE_GAP=3.0;
+var outX=LX[LY.length-1];
+var MAX_WAVES=3;
+
+var waves=[];
+function spawnWave(){
+    var w={sigs:[],time:0,done:false,beamFired:false};
+    for(var i=0;i<NSIG;i++){
+        var src=layerOff[0]+i;
+        var dst=layerOff[1]+Math.floor(Math.random()*LY[1]);
+        w.sigs.push({state:"travel",layer:0,src:src,dst:dst,
+            prog:0,dwellT:0,fadeA:1,
+            delay:i*0.02,started:false,
+            hist:[],bright:0.35+Math.random()*0.35});
+    }
+    waves.push(w);
+}
+spawnWave();
+var nextWaveIn=WAVE_GAP;
+
+var TOTAL_SLOTS=NSIG*MAX_WAVES;
+var sVerts=new Float32Array(TOTAL_SLOTS*TAIL*6);
+var sColors=new Float32Array(TOTAL_SLOTS*TAIL*8);
+var sGeo=new THREE.BufferGeometry();
+sGeo.setAttribute("position",new THREE.BufferAttribute(sVerts,3));
+sGeo.setAttribute("color",new THREE.BufferAttribute(sColors,4));
+var sMat=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending});
+var sMesh=new THREE.LineSegments(sGeo,sMat);
+
+var NBEAMS=3,BTAIL=14;
+var beamPool=[];
+for(var i=0;i<NBEAMS;i++)beamPool.push({active:false,life:0,maxLife:3,hist:[],x:outX,y:0,z:0,vx:0,vy:0,vz:0});
+var bVerts=new Float32Array(NBEAMS*BTAIL*6);
+var bColors=new Float32Array(NBEAMS*BTAIL*8);
+var bGeo=new THREE.BufferGeometry();
+bGeo.setAttribute("position",new THREE.BufferAttribute(bVerts,3));
+bGeo.setAttribute("color",new THREE.BufferAttribute(bColors,4));
+var bMat=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending});
+var bMesh=new THREE.LineSegments(bGeo,bMat);
+
+var group=new THREE.Group();
+group.add(nCloud);group.add(eMesh);group.add(sMesh);group.add(bMesh);
+group.rotation.y=-0.1;
+scene.add(group);
+
+var clock=new THREE.Clock(),curNc=nc.clone();
+
+function sigPos(s,np,out){
+    var a=s.src*3,b=s.dst*3;
+    var p=Math.min(1,s.prog);
+    var ease=p<0.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+    out[0]=np[a]+(np[b]-np[a])*ease;
+    out[1]=np[a+1]+(np[b+1]-np[a+1])*ease;
+    out[2]=np[a+2]+(np[b+2]-np[a+2])*ease;
+    if(s.state==="dwell"){
+        var jit=s.dwellT*10;
+        out[0]+=Math.sin(jit*3.7+s.src)*0.04;
+        out[1]+=Math.cos(jit*5.1+s.dst)*0.04;
+        out[2]+=Math.sin(jit*4.3+s.src+s.dst)*0.03;
+    }
+}
+
+function fireBeam(cr,cg,cb){
+    for(var i=0;i<NBEAMS;i++){
+        if(!beamPool[i].active){
+            var b=beamPool[i];
+            b.active=true;b.life=0;
+            b.x=outX;b.y=0;b.z=0;
+            var ang=Math.random()*6.28,sp=1.2+Math.random()*1.5;
+            b.vx=sp;b.vy=Math.sin(ang)*sp*0.15;b.vz=Math.cos(ang)*sp*0.15;
+            b.maxLife=2.5+Math.random()*1.5;b.hist=[];
+            return;
+        }
+    }
+}
+
+function animate(){
+    requestAnimationFrame(animate);
+    var t=clock.getElapsedTime(),dt=Math.min(clock.getDelta()||0.016,0.05);
+
+    var np=nCloud.geometry.attributes.position.array;
+    for(var i=0;i<nodePos.length;i++){
+        var m=nodeMeta[i],o=Math.sin(t*m.fr+m.ph)*m.am;
+        np[i*3]=nodePos[i].x;np[i*3+1]=nodePos[i].y+o;np[i*3+2]=nodePos[i].z+o*0.3;
+    }
+    nCloud.geometry.attributes.position.needsUpdate=true;
+
+    nextWaveIn-=dt;
+    if(nextWaveIn<=0&&waves.length<MAX_WAVES){
+        spawnWave();nextWaveIn=WAVE_GAP;
+    }
+
+    var sv=sMesh.geometry.attributes.position.array;
+    var sc=sMesh.geometry.attributes.color.array;
+    var cr=curNc.r,cg=curNc.g,cb=curNc.b;
+    var pos=[0,0,0];
+    var slotIdx=0;
+
+    for(var wi=waves.length-1;wi>=0;wi--){
+        var w=waves[wi];
+        w.time+=dt;
+        var allDone=true,arrived=0;
+
+        for(var i=0;i<NSIG;i++){
+            var s=w.sigs[i];
+            var si=slotIdx+i;
+            if(!s.started){if(w.time>=s.delay)s.started=true;else{allDone=false;
+                var cbase=si*TAIL*8;
+                for(var j=0;j<TAIL;j++){sc[cbase+j*8+3]=0;sc[cbase+j*8+7]=0}
+                continue;}}
+            if(s.state==="travel"){
+                allDone=false;
+                s.prog+=dt/TRAVEL_T;
+                if(s.prog>=1){s.prog=1;s.state="dwell";s.dwellT=0}
+            }else if(s.state==="dwell"){
+                allDone=false;
+                s.dwellT+=dt;
+                if(s.dwellT>=DWELL_T){
+                    var nextL=s.layer+1;
+                    if(nextL>=LY.length-1){
+                        s.state="arrived";arrived++;
+                    }else if(Math.random()<SURVIVE){
+                        s.layer=nextL;s.src=s.dst;
+                        s.dst=layerOff[nextL+1]+Math.floor(Math.random()*LY[nextL+1]);
+                        s.prog=0;s.state="travel";
+                    }else{s.state="dead";s.fadeA=1}
+                }
+            }else if(s.state==="dead"){
+                s.fadeA-=dt/FADE_T;
+                if(s.fadeA>0)allDone=false;
+            }else if(s.state==="arrived"){arrived++}
+
+            sigPos(s,np,pos);
+            s.hist.unshift({x:pos[0],y:pos[1],z:pos[2]});
+            if(s.hist.length>TAIL+1)s.hist.length=TAIL+1;
+
+            var alpha=s.state==="dead"?Math.max(0,s.fadeA):1;
+            var base=si*TAIL*6,cbase=si*TAIL*8;
+            for(var j=0;j<TAIL;j++){
+                var h0=s.hist[j]||s.hist[s.hist.length-1]||{x:0,y:0,z:0};
+                var h1=s.hist[j+1]||h0;
+                var off=base+j*6;
+                sv[off]=h0.x;sv[off+1]=h0.y;sv[off+2]=h0.z;
+                sv[off+3]=h1.x;sv[off+4]=h1.y;sv[off+5]=h1.z;
+                var a=alpha*(1-j/TAIL)*s.bright;
+                var co=cbase+j*8;
+                sc[co]=cr;sc[co+1]=cg;sc[co+2]=cb;sc[co+3]=a;
+                sc[co+4]=cr;sc[co+5]=cg;sc[co+6]=cb;sc[co+7]=a*0.4;
+            }
+        }
+
+        if(allDone&&!w.beamFired){
+            w.beamFired=true;w.done=true;
+            if(arrived>0)fireBeam(cr,cg,cb);
+        }
+        slotIdx+=NSIG;
+    }
+
+    for(var si=slotIdx;si<TOTAL_SLOTS;si++){
+        var cbase=si*TAIL*8;
+        for(var j=0;j<TAIL;j++){sc[cbase+j*8+3]=0;sc[cbase+j*8+7]=0}
+    }
+
+    waves=waves.filter(function(w){return!w.done});
+
+    sMesh.geometry.attributes.position.needsUpdate=true;
+    sMesh.geometry.attributes.color.needsUpdate=true;
+
+    var bv=bMesh.geometry.attributes.position.array;
+    var bc=bMesh.geometry.attributes.color.array;
+    for(var i=0;i<NBEAMS;i++){
+        var b=beamPool[i];
+        var bbase=i*BTAIL*6,bcbase=i*BTAIL*8;
+        if(b.active){
+            b.life+=dt;
+            b.x+=b.vx*dt;b.y+=b.vy*dt;b.z+=b.vz*dt;
+            b.vy*=0.997;b.vz*=0.997;
+            b.hist.unshift({x:b.x,y:b.y,z:b.z});
+            if(b.hist.length>BTAIL+1)b.hist.length=BTAIL+1;
+            var fade=1-b.life/b.maxLife;if(fade<0)fade=0;
+            for(var j=0;j<BTAIL;j++){
+                var h0=b.hist[j]||b.hist[b.hist.length-1];
+                var h1=b.hist[j+1]||h0;
+                var off=bbase+j*6;
+                bv[off]=h0.x;bv[off+1]=h0.y;bv[off+2]=h0.z;
+                bv[off+3]=h1.x;bv[off+4]=h1.y;bv[off+5]=h1.z;
+                var a=fade*(1-j/BTAIL);
+                var co=bcbase+j*8;
+                bc[co]=cr;bc[co+1]=cg;bc[co+2]=cb;bc[co+3]=a;
+                bc[co+4]=cr;bc[co+5]=cg;bc[co+6]=cb;bc[co+7]=a*0.4;
+            }
+            if(b.life>=b.maxLife){
+                b.active=false;
+                for(var j=0;j<BTAIL;j++){var co=bcbase+j*8;bc[co+3]=0;bc[co+7]=0}
+            }
+        }else{
+            for(var j=0;j<BTAIL;j++){var co=bcbase+j*8;bc[co+3]=0;bc[co+7]=0}
+        }
+    }
+    bMesh.geometry.attributes.position.needsUpdate=true;
+    bMesh.geometry.attributes.color.needsUpdate=true;
+
+    renderer.render(scene,camera);
+}
+animate();
+
+window.addEventListener("resize",function(){
+    W=canvas.clientWidth;H=canvas.clientHeight;
+    if(W<1||H<1)return;
+    camera.aspect=W/H;camera.updateProjectionMatrix();
+    renderer.setSize(W,H);
+});
+window.__nnUpdateTheme=function(){
+    curNc=nnColor();nMat.color.copy(curNc);eMat.color.copy(curNc);
+};
+window.__nnCleanup=function(){renderer.dispose();};
+}
+initNN();
+</script>
+{% endblock %}

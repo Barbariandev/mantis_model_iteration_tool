@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}MANTIS Agentic Mining{% endblock %}</title>
+<script>
+const THEMES = {
+    retro: {
+        label: "Retro",
+        bg: "#000000", surface: "#0a0f0a", surfaceRaised: "#0f1a0f",
+        border: "rgba(0,255,65,0.12)", borderHover: "rgba(0,255,65,0.28)",
+        text: "#00ff41", textSecondary: "#00aa2a", textTertiary: "#006018",
+        accent: "#00ff41", accentDim: "rgba(0,255,65,0.08)",
+        green: "#00ff41", greenDim: "rgba(0,255,65,0.08)",
+        red: "#ff3333", redDim: "rgba(255,51,51,0.10)",
+        amber: "#ffaa00", selection: "rgba(0,255,65,0.25)",
+        btnPrimaryText: "#000", btnPrimaryHover: "#00cc33",
+        radius: "2px", radiusSm: "1px",
+        font: '"SF Mono","Fira Code","JetBrains Mono","Cascadia Code","Consolas",monospace',
+        smoothing: "none", scanlines: true, uppercase: true,
+        focusGlow: "0 0 8px rgba(0,255,65,0.15)",
+        chartPalette: '["#00ff41","#00cc33","#33ff66","#ffaa00","#ff3333","#00ff88","#66ff99","#88ffbb"]',
+    },
+    mono: {
+        label: "Mono",
+        bg: "#080808", surface: "#111111", surfaceRaised: "#1a1a1a",
+        border: "rgba(255,255,255,0.10)", borderHover: "rgba(255,255,255,0.22)",
+        text: "#d4d4d4", textSecondary: "#888888", textTertiary: "#555555",
+        accent: "#ffffff", accentDim: "rgba(255,255,255,0.06)",
+        green: "#cccccc", greenDim: "rgba(255,255,255,0.06)",
+        red: "#ff4444", redDim: "rgba(255,68,68,0.10)",
+        amber: "#ccaa00", selection: "rgba(255,255,255,0.2)",
+        btnPrimaryText: "#000", btnPrimaryHover: "#dddddd",
+        radius: "2px", radiusSm: "1px",
+        font: '"SF Mono","Fira Code","JetBrains Mono","Cascadia Code","Consolas",monospace',
+        smoothing: "none", scanlines: false, uppercase: true,
+        focusGlow: "0 0 8px rgba(255,255,255,0.1)",
+        chartPalette: '["#ffffff","#aaaaaa","#cccccc","#888888","#ff4444","#dddddd","#999999","#bbbbbb"]',
+    },
+    classic: {
+        label: "Classic",
+        bg: "#0c0c0f", surface: "#18181b", surfaceRaised: "#222226",
+        border: "rgba(255,255,255,0.06)", borderHover: "rgba(255,255,255,0.12)",
+        text: "#f0f0f3", textSecondary: "#7c7c82", textTertiary: "#52525a",
+        accent: "#818cf8", accentDim: "rgba(129,140,248,0.12)",
+        green: "#6ee7b7", greenDim: "rgba(110,231,183,0.12)",
+        red: "#fca5a5", redDim: "rgba(252,165,165,0.10)",
+        amber: "#fcd34d", selection: "rgba(129,140,248,0.3)",
+        btnPrimaryText: "#fff", btnPrimaryHover: "#6b76e0",
+        radius: "12px", radiusSm: "8px",
+        font: '-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",system-ui,sans-serif',
+        smoothing: "antialiased", scanlines: false, uppercase: false,
+        focusGlow: "none",
+        chartPalette: '["#818cf8","#6ee7b7","#fcd34d","#fca5a5","#c4b5fd","#93c5fd","#86efac","#fde68a"]',
+    },
+    amber: {
+        label: "Amber",
+        bg: "#0a0600", surface: "#120e04", surfaceRaised: "#1a1408",
+        border: "rgba(255,176,0,0.12)", borderHover: "rgba(255,176,0,0.28)",
+        text: "#ffb000", textSecondary: "#aa7700", textTertiary: "#664400",
+        accent: "#ffb000", accentDim: "rgba(255,176,0,0.08)",
+        green: "#ffb000", greenDim: "rgba(255,176,0,0.08)",
+        red: "#ff4444", redDim: "rgba(255,68,68,0.10)",
+        amber: "#ffb000", selection: "rgba(255,176,0,0.25)",
+        btnPrimaryText: "#000", btnPrimaryHover: "#dd9900",
+        radius: "2px", radiusSm: "1px",
+        font: '"SF Mono","Fira Code","JetBrains Mono","Cascadia Code","Consolas",monospace',
+        smoothing: "none", scanlines: true, uppercase: true,
+        focusGlow: "0 0 8px rgba(255,176,0,0.15)",
+        chartPalette: '["#ffb000","#dd9900","#ffcc44","#ff4444","#ffdd88","#cc8800","#ffaa00","#eebb44"]',
+    },
+};
+
+function applyTheme(name) {
+    const t = THEMES[name] || THEMES.mono;
+    const r = document.documentElement;
+    r.style.setProperty("--bg", t.bg);
+    r.style.setProperty("--surface", t.surface);
+    r.style.setProperty("--surface-raised", t.surfaceRaised);
+    r.style.setProperty("--border", t.border);
+    r.style.setProperty("--border-hover", t.borderHover);
+    r.style.setProperty("--text", t.text);
+    r.style.setProperty("--text-secondary", t.textSecondary);
+    r.style.setProperty("--text-tertiary", t.textTertiary);
+    r.style.setProperty("--accent", t.accent);
+    r.style.setProperty("--accent-dim", t.accentDim);
+    r.style.setProperty("--green", t.green);
+    r.style.setProperty("--green-dim", t.greenDim);
+    r.style.setProperty("--red", t.red);
+    r.style.setProperty("--red-dim", t.redDim);
+    r.style.setProperty("--amber", t.amber);
+    r.style.setProperty("--selection", t.selection);
+    r.style.setProperty("--btn-primary-text", t.btnPrimaryText);
+    r.style.setProperty("--btn-primary-hover", t.btnPrimaryHover);
+    r.style.setProperty("--radius", t.radius);
+    r.style.setProperty("--radius-sm", t.radiusSm);
+    r.style.setProperty("--font-body", t.font);
+    r.style.setProperty("--focus-glow", t.focusGlow);
+    document.body.style.fontFamily = t.font;
+    document.body.style.webkitFontSmoothing = t.smoothing;
+
+    document.body.classList.toggle("scanlines", !!t.scanlines);
+    document.body.classList.toggle("theme-uppercase", !!t.uppercase);
+    document.body.classList.toggle("theme-classic", name === "classic");
+
+    document.body.setAttribute("data-theme", name);
+    localStorage.setItem("mantis-theme", name);
+    window.__chartPalette = JSON.parse(t.chartPalette);
+    if(window.__nnUpdateTheme)window.__nnUpdateTheme();
+}
+
+(function() {
+    var saved = localStorage.getItem("mantis-theme") || "mono";
+    var t = THEMES[saved] || THEMES.mono;
+    var r = document.documentElement;
+    r.style.setProperty("--bg", t.bg);
+    r.style.setProperty("--surface", t.surface);
+    r.style.setProperty("--surface-raised", t.surfaceRaised);
+    r.style.setProperty("--border", t.border);
+    r.style.setProperty("--border-hover", t.borderHover);
+    r.style.setProperty("--text", t.text);
+    r.style.setProperty("--text-secondary", t.textSecondary);
+    r.style.setProperty("--text-tertiary", t.textTertiary);
+    r.style.setProperty("--accent", t.accent);
+    r.style.setProperty("--accent-dim", t.accentDim);
+    r.style.setProperty("--green", t.green);
+    r.style.setProperty("--green-dim", t.greenDim);
+    r.style.setProperty("--red", t.red);
+    r.style.setProperty("--red-dim", t.redDim);
+    r.style.setProperty("--amber", t.amber);
+    r.style.setProperty("--selection", t.selection);
+    r.style.setProperty("--btn-primary-text", t.btnPrimaryText);
+    r.style.setProperty("--btn-primary-hover", t.btnPrimaryHover);
+    r.style.setProperty("--radius", t.radius);
+    r.style.setProperty("--radius-sm", t.radiusSm);
+    r.style.setProperty("--font-body", t.font);
+    r.style.setProperty("--focus-glow", t.focusGlow);
+    window.__chartPalette = JSON.parse(t.chartPalette);
+    window.__earlyTheme = saved;
+})();
+</script>
+<style>
+:root {
+    --bg: #080808;
+    --surface: #111111;
+    --surface-raised: #1a1a1a;
+    --border: rgba(255,255,255,0.10);
+    --border-hover: rgba(255,255,255,0.22);
+    --text: #d4d4d4;
+    --text-secondary: #888888;
+    --text-tertiary: #555555;
+    --accent: #ffffff;
+    --accent-dim: rgba(255,255,255,0.06);
+    --green: #cccccc;
+    --green-dim: rgba(255,255,255,0.06);
+    --red: #ff4444;
+    --red-dim: rgba(255,68,68,0.10);
+    --amber: #ccaa00;
+    --selection: rgba(255,255,255,0.2);
+    --btn-primary-text: #000;
+    --btn-primary-hover: #dddddd;
+    --radius: 2px;
+    --radius-sm: 1px;
+    --font-body: "SF Mono","Fira Code","JetBrains Mono","Cascadia Code","Consolas",monospace;
+    --focus-glow: 0 0 8px rgba(255,255,255,0.1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: var(--font-body);
+    background: var(--bg); color: var(--text); line-height: 1.5;
+    font-size: 13px;
+    -webkit-font-smoothing: none;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+body.theme-classic a:hover { text-decoration: none; opacity: 0.85; }
+.container { max-width: 960px; margin: 0 auto; padding: 24px 20px; }
+nav {
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px; display: flex; align-items: center; gap: 24px;
+    position: sticky; top: 0; z-index: 100;
+}
+body.theme-classic nav { background: rgba(12,12,15,0.8); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+nav .brand {
+    font-size: 14px; font-weight: 700; color: var(--accent);
+    letter-spacing: 0.1em;
+}
+body.theme-uppercase nav .brand { text-transform: uppercase; }
+nav a { color: var(--text-secondary); font-size: 12px; }
+nav a:hover { color: var(--accent); text-decoration: none; }
+nav a.nav-active { color: var(--accent); }
+
+h2 { font-size: 16px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; }
+h3 { font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 6px; letter-spacing: 0.03em; }
+body.theme-uppercase h2, body.theme-uppercase h3 { text-transform: uppercase; }
+body.theme-classic h2 { font-size: 22px; color: var(--text); letter-spacing: -0.02em; }
+body.theme-classic h3 { font-size: 16px; color: var(--text); letter-spacing: -0.01em; }
+
+.card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px; margin-bottom: 6px;
+    transition: border-color 0.15s;
+}
+.card:hover { border-color: var(--border-hover); }
+body.theme-classic .card { padding: 20px; margin-bottom: 12px; }
+
+.badge {
+    display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 1px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    border: 1px solid;
+}
+body.theme-uppercase .badge { text-transform: uppercase; }
+body.theme-classic .badge { border-radius: 100px; padding: 3px 10px; font-size: 11px; font-weight: 600; border: none; }
+.badge-running { background: transparent; color: var(--accent); border-color: var(--accent); }
+.badge-completed { background: transparent; color: var(--green); border-color: var(--green); }
+.badge-stopped { background: transparent; color: var(--red); border-color: var(--red); }
+.badge-crashed { background: transparent; color: var(--amber); border-color: var(--amber); }
+.badge-paused { background: transparent; color: var(--amber); border-color: var(--amber); }
+.badge-max_iterations_reached { background: transparent; color: var(--text-secondary); border-color: var(--text-secondary); }
+.badge-custom-data { background: transparent; color: #f59e0b; border-color: #f59e0b; animation: custom-data-pulse 2s ease-in-out infinite; }
+@keyframes custom-data-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+body.theme-classic .badge-custom-data { background: rgba(245,158,11,0.15); border: none; }
+.badge-starting { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+body.theme-classic .badge-running { background: var(--accent-dim); border: none; }
+body.theme-classic .badge-completed { background: var(--green-dim); border: none; }
+body.theme-classic .badge-stopped { background: var(--red-dim); border: none; }
+body.theme-classic .badge-crashed { background: rgba(251,191,36,0.12); border: none; }
+body.theme-classic .badge-paused { background: rgba(251,191,36,0.12); border: none; }
+body.theme-classic .badge-max_iterations_reached { background: rgba(124,124,130,0.12); border: none; }
+body.theme-classic .badge-starting { border: none; }
+
+.btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 6px 14px; border-radius: var(--radius);
+    border: 1px solid var(--accent); cursor: pointer; font-size: 11px; font-weight: 700;
+    font-family: inherit; transition: all 0.15s; letter-spacing: 0.05em;
+    background: transparent; color: var(--accent);
+}
+body.theme-uppercase .btn { text-transform: uppercase; }
+.btn:hover { background: var(--accent-dim); }
+.btn-primary { background: var(--accent); color: var(--btn-primary-text); border-color: var(--accent); }
+.btn-primary:hover { background: var(--btn-primary-hover); border-color: var(--btn-primary-hover); }
+.btn-danger { background: transparent; color: var(--red); border-color: var(--red); }
+.btn-danger:hover { background: var(--red-dim); }
+.btn-sm { padding: 4px 10px; font-size: 10px; }
+body.theme-classic .btn { border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; padding: 8px 18px; letter-spacing: 0; text-transform: none; }
+body.theme-classic .btn-primary { color: #fff; }
+body.theme-classic .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+body.theme-classic .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+input, select, textarea {
+    background: var(--bg); border: 1px solid var(--border); color: var(--accent);
+    border-radius: var(--radius); padding: 8px 10px; font-size: 12px; width: 100%;
+    font-family: inherit; transition: border-color 0.15s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); outline: none; box-shadow: var(--focus-glow); }
+input::placeholder, textarea::placeholder { color: var(--text-tertiary); }
+select { color: var(--accent); }
+select option { background: var(--bg); color: var(--accent); }
+body.theme-classic input, body.theme-classic select, body.theme-classic textarea {
+    color: var(--text); padding: 10px 14px; font-size: 14px;
+}
+
+label { display: block; margin-bottom: 4px; font-size: 11px; color: var(--text-secondary); font-weight: 700; letter-spacing: 0.05em; }
+body.theme-uppercase label { text-transform: uppercase; }
+body.theme-classic label { font-size: 13px; font-weight: 500; letter-spacing: 0; }
+
+.form-row { margin-bottom: 12px; }
+.form-inline { display: flex; gap: 10px; margin-bottom: 12px; }
+.form-inline > div { flex: 1; }
+.text-muted { color: var(--text-secondary); }
+.text-tertiary { color: var(--text-tertiary); }
+.text-sm { font-size: 11px; }
+.mt-2 { margin-top: 12px; }
+.mb-2 { margin-bottom: 12px; }
+.flex { display: flex; gap: 10px; align-items: center; }
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+pre {
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px; overflow-x: auto; font-size: 11px; line-height: 1.5;
+    font-family: "SF Mono","Fira Code","JetBrains Mono","Consolas",monospace; color: var(--text-secondary);
+}
+.chart-container { position: relative; width: 100%; height: 260px; margin: 8px 0 4px; }
+.chart-container canvas { width: 100% !important; height: 100% !important; }
+::selection { background: var(--selection); color: #000; }
+
+/* Scanline effects -- only active with .scanlines class */
+@keyframes scanline-move {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100vh); }
+}
+body.scanlines::after {
+    content: ""; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, var(--accent-dim) 2px, var(--accent-dim) 4px);
+    pointer-events: none; z-index: 9999; opacity: 0.2;
+}
+body.scanlines::before {
+    content: ""; position: fixed; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--accent-dim);
+    animation: scanline-move 8s linear infinite;
+    pointer-events: none; z-index: 10000;
+}
+</style>
+</head>
+<body>
+<nav>
+    <span class="brand">[MANTIS Agentic Mining]</span>
+    <a href="#" class="nav-tab" data-view="dashboard" id="nav-dash">&gt; dashboard</a>
+    <a href="#" class="nav-tab" data-view="guide" id="nav-guide">&gt; guide</a>
+    <a href="#" class="nav-tab" data-view="settings" id="nav-settings">&gt; settings</a>
+</nav>
+<div class="container">
+{% block content %}{% endblock %}
+</div>
+{% block scripts %}{% endblock %}
+<script>
+applyTheme(window.__earlyTheme || localStorage.getItem("mantis-theme") || "mono");
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous" async onload="window.__chartReady=true"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js" integrity="sha384-qOkzR5Ke/XkQxuGVJ9hpFEpDlcoLtWwVYhnJf06cLIZa2vaIptSqaubivErzmD5O" crossorigin="anonymous" async onload="if(window.__nnInit)window.__nnInit()"></script>
+</body>
+</html>
