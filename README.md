@@ -1,6 +1,6 @@
 # MANTIS Agentic Mining Playground
 
-Autonomous AI agents that research, code, and evaluate cryptocurrency trading signal strategies. Each agent runs Claude Code inside a sandboxed Docker container, iteratively building features, training models, and evaluating them with walk-forward backtesting and strict causal data access.
+Autonomous AI agents that research, code, and evaluate cryptocurrency predictive systems. Each agent runs Claude Code inside a sandboxed Docker container, iteratively building features, training models, and evaluating them with walk-forward backtesting and strict causal data access.
 
 ## Prerequisites
 
