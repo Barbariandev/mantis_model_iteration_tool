@@ -35,7 +35,7 @@ def get_prefetch_status():
 
 
 def _all_assets():
-    from playground.evaluator import CHALLENGES
+    from model_iteration_tool.evaluator import CHALLENGES
     assets = set()
     for cfg in CHALLENGES.values():
         assets.update(cfg.assets)
@@ -48,7 +48,7 @@ def cache_dir_for(days_back):
 
 def _fetch_one_ohlcv(asset, interval, days_back, cache_dir):
     """Fetch OHLCV for a single asset. Returns (asset, DataFrame) or None."""
-    from playground.data import fetch_klines, TICKER_TO_SYMBOL
+    from model_iteration_tool.data import fetch_klines, TICKER_TO_SYMBOL
     import os
     symbol = TICKER_TO_SYMBOL.get(asset)
     if not symbol:
@@ -75,7 +75,7 @@ def _fetch_one_ohlcv(asset, interval, days_back, cache_dir):
 
 def _fetch_one_cg(asset, minute_ts, api_key, days_back):
     """Fetch CoinGlass for a single asset. Returns (asset, feats) or None."""
-    from playground.coinglass import fetch_coinglass_features
+    from model_iteration_tool.coinglass import fetch_coinglass_features
     logger.info("Fetching CoinGlass for %s...", asset)
     feats = fetch_coinglass_features(asset, minute_ts, api_key, days_back=days_back)
     if feats:

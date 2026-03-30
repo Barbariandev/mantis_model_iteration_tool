@@ -7,8 +7,8 @@ from sklearn.linear_model import LogisticRegression
 from scipy.stats import spearmanr
 from sklearn.metrics import roc_auc_score, log_loss
 
-from playground.data import DataProvider, BREAKOUT_ASSETS
-from playground.featurizer import Featurizer, Predictor
+from model_iteration_tool.data import DataProvider, BREAKOUT_ASSETS
+from model_iteration_tool.featurizer import Featurizer, Predictor
 
 logger = logging.getLogger(__name__)
 
@@ -735,7 +735,7 @@ def evaluate(challenge_name, featurizer, predictor, provider=None,
         raise ValueError(f"Unknown challenge {challenge_name!r}. Available: {list(CHALLENGES.keys())}")
     config = CHALLENGES[challenge_name]
     if provider is None:
-        from playground.data import fetch_assets
+        from model_iteration_tool.data import fetch_assets
         data, _ = fetch_assets(
             assets=config.assets, interval=interval, days_back=days_back)
         provider = DataProvider(data)

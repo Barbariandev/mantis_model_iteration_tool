@@ -140,7 +140,7 @@ def fetch_assets(assets=None, interval="1m", days_back=90, cache_dir=None,
     if not coinglass_api_key:
         return result, {}
 
-    from playground.coinglass import fetch_coinglass_features
+    from model_iteration_tool.coinglass import fetch_coinglass_features
 
     min_len = min(len(df) for df in result.values()) if result else 0
     if min_len == 0:

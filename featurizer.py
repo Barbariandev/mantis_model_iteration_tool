@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
-from playground.data import CausalView
+from model_iteration_tool.data import CausalView
 
 
 class Featurizer(ABC):

@@ -6,7 +6,7 @@ Build and evaluate featurizers and predictors against MANTIS challenges using re
 
 ```python
 import numpy as np
-from playground import Featurizer, Predictor, evaluate
+from model_iteration_tool import Featurizer, Predictor, evaluate
 
 class MyFeaturizer(Featurizer):
     warmup = 200
@@ -148,7 +148,7 @@ Buckets are vol-normalized return bins at z-score thresholds [-2, -1, 1, 2]:
 Fetch once, evaluate multiple strategies:
 
 ```python
-from playground import fetch_assets, DataProvider, evaluate
+from model_iteration_tool import fetch_assets, DataProvider, evaluate
 
 data, _ = fetch_assets(assets=["ETH"], interval="1m", days_back=90)
 provider = DataProvider(data)
@@ -159,7 +159,7 @@ result = evaluate("ETH-1H-BINARY", my_featurizer, my_predictor, provider=provide
 For multi-asset challenges, load all assets:
 
 ```python
-from playground import BREAKOUT_ASSETS
+from model_iteration_tool import BREAKOUT_ASSETS
 
 data, _ = fetch_assets(assets=BREAKOUT_ASSETS, interval="1m", days_back=90)
 provider = DataProvider(data)
@@ -167,7 +167,7 @@ provider = DataProvider(data)
 result = evaluate("MULTI-BREAKOUT", my_featurizer, my_predictor, provider=provider)
 ```
 
-Data is cached to `playground/.data/` on first fetch (configurable via `MANTIS_DATA_DIR`).
+Data is cached to `model_iteration_tool/.data/` on first fetch (configurable via `MANTIS_DATA_DIR`).
 
 ## What the evaluation returns
 
@@ -233,7 +233,7 @@ class MultiScaleFeaturizer(Featurizer):
 ## File layout
 
 ```
-playground/
+model_iteration_tool/
     __init__.py         # public API exports
     data.py             # Binance fetcher, CausalView, DataProvider
     featurizer.py       # Featurizer and Predictor base classes
@@ -241,5 +241,5 @@ playground/
     coinglass.py        # CoinGlass derivatives data (OI, funding, liquidations)
     data_cache.py       # data prefetch and caching
     example_binary.py   # example strategy implementation
-    test_playground.py  # 22 tests (causality, labels, leakage, evaluation)
+    test_model_iteration_tool.py  # test suite (causality, labels, leakage, evaluation)
 ```

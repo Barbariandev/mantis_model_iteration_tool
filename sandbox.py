@@ -70,13 +70,13 @@ def image_exists():
     return r.returncode == 0 and r.stdout.strip() != ""
 
 
-def build_image(playground_dir):
-    dockerfile = os.path.join(playground_dir, "Dockerfile")
+def build_image(pkg_dir):
+    dockerfile = os.path.join(pkg_dir, "Dockerfile")
     if not os.path.exists(dockerfile):
         raise FileNotFoundError(f"No Dockerfile at {dockerfile}")
     logger.info("Building Docker image %s ...", IMAGE_NAME)
     r = subprocess.run(
-        ["docker", "build", "-t", IMAGE_NAME, "-f", dockerfile, playground_dir],
+        ["docker", "build", "-t", IMAGE_NAME, "-f", dockerfile, pkg_dir],
         capture_output=True, text=True, timeout=600)
     if r.returncode != 0:
         logger.error("Docker build failed:\n%s", r.stderr[-2000:])
@@ -84,9 +84,9 @@ def build_image(playground_dir):
     logger.info("Docker image %s built", IMAGE_NAME)
 
 
-def _image_stale(playground_dir):
+def _image_stale(pkg_dir):
     """Check if the Dockerfile is newer than the built image."""
-    dockerfile = os.path.join(playground_dir, "Dockerfile")
+    dockerfile = os.path.join(pkg_dir, "Dockerfile")
     if not os.path.exists(dockerfile):
         return False
     r = _run(["docker", "inspect", "--format", "{{.Created}}", IMAGE_NAME])
@@ -102,9 +102,9 @@ def _image_stale(playground_dir):
         return False
 
 
-def ensure_image(playground_dir):
-    if not image_exists() or _image_stale(playground_dir):
-        build_image(playground_dir)
+def ensure_image(pkg_dir):
+    if not image_exists() or _image_stale(pkg_dir):
+        build_image(pkg_dir)
 
 
 def container_name(agent_id):
@@ -141,7 +141,7 @@ def container_running(agent_id):
     return _list_containers().get(container_name(agent_id), False)
 
 
-def launch_container(agent_id, config, agent_dir, playground_dir, data_dir,
+def launch_container(agent_id, config, agent_dir, pkg_dir, data_dir,
                      anthropic_key, coinglass_key=None):
     """Launch agent_runner.py inside a Docker container."""
     cname = container_name(agent_id)
@@ -149,7 +149,7 @@ def launch_container(agent_id, config, agent_dir, playground_dir, data_dir,
     kill_container(agent_id)
 
     agent_dir_abs = os.path.abspath(agent_dir)
-    playground_abs = os.path.abspath(playground_dir)
+    pkg_abs = os.path.abspath(pkg_dir)
 
     def _env_safe(v):
         return str(v).replace("\n", "").replace("\r", "").replace("\0", "")
@@ -168,7 +168,7 @@ def launch_container(agent_id, config, agent_dir, playground_dir, data_dir,
         "--add-host=metadata.google.internal:127.0.0.1",
         "--add-host=169.254.169.254:127.0.0.1",
         "-v", f"{agent_dir_abs}:/agent",
-        "-v", f"{playground_abs}:/app/playground:ro",
+        "-v", f"{pkg_abs}:/app/model_iteration_tool:ro",
         "-e", f"ANTHROPIC_API_KEY={_env_safe(anthropic_key)}",
         "-e", "ANTHROPIC_AUTH_TOKEN=",
         "-e", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
@@ -182,7 +182,7 @@ def launch_container(agent_id, config, agent_dir, playground_dir, data_dir,
         cmd.extend(["-e", "MANTIS_DATA_DIR=/data"])
 
     runner_args = [
-        "python3", "/app/playground/agent_runner.py",
+        "python3", "/app/model_iteration_tool/agent_runner.py",
         "--challenge", config["challenge"],
         "--goal", config["goal"],
         "--min-iterations", str(config.get("min_iterations", 5)),

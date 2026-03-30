@@ -19,12 +19,12 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-PLAYGROUND_DIR = Path(__file__).parent
+PKG_DIR = Path(__file__).parent
 WORKING_DIR = Path(__file__).parent.parent
 
 _AGENTS_DIR_OVERRIDE = os.environ.get("MANTIS_AGENT_DIR")
 _DATA_DIR_OVERRIDE = os.environ.get("MANTIS_DATA_DIR")
-AGENTS_DIR = Path(_AGENTS_DIR_OVERRIDE) if _AGENTS_DIR_OVERRIDE else PLAYGROUND_DIR / "agents"
+AGENTS_DIR = Path(_AGENTS_DIR_OVERRIDE) if _AGENTS_DIR_OVERRIDE else PKG_DIR / "agents"
 
 if str(WORKING_DIR) not in sys.path:
     sys.path.insert(0, str(WORKING_DIR))
@@ -43,7 +43,7 @@ _stop_event = threading.Event()
 _child_procs = set()
 _child_procs_lock = threading.Lock()
 
-PLAYGROUND_FILES = [
+PKG_FILES = [
     "__init__.py", "data.py", "evaluator.py", "featurizer.py",
     "coinglass.py", "data_cache.py", "example_binary.py", "GUIDE.md",
 ]
@@ -85,15 +85,15 @@ CHALLENGE_META = {
 # ── Workspace setup ──────────────────────────────────────────────────────────
 
 def _setup_workspace(agent_dir):
-    """Create an isolated workspace with a copy of the playground framework.
+    """Create an isolated workspace with a copy of the framework.
     Framework files are refreshed every call so agents get bug fixes."""
     workspace = agent_dir / "workspace"
-    pg_dest = workspace / "playground"
+    pg_dest = workspace / "model_iteration_tool"
     first_time = not pg_dest.exists()
     pg_dest.mkdir(parents=True, exist_ok=True)
 
-    for fname in PLAYGROUND_FILES:
-        src = PLAYGROUND_DIR / fname
+    for fname in PKG_FILES:
+        src = PKG_DIR / fname
         if src.exists():
             shutil.copy2(src, pg_dest / fname)
 
@@ -146,7 +146,7 @@ def _claude_cmd(prompt):
 # ── Challenge helpers ────────────────────────────────────────────────────────
 
 def _challenge_info(challenge_name):
-    from playground.evaluator import CHALLENGES
+    from model_iteration_tool.evaluator import CHALLENGES
     cfg = CHALLENGES[challenge_name]
     meta = CHALLENGE_META[cfg.challenge_type]
     return cfg.embedding_dim, meta["format"], meta["primary_metric"], meta["direction"], meta["all_metrics"]
@@ -385,8 +385,8 @@ def _write_api_reference(workspace):
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
-from playground.featurizer import Featurizer, Predictor
-from playground.data import CausalView
+from model_iteration_tool.featurizer import Featurizer, Predictor
+from model_iteration_tool.data import CausalView
 
 class TechFeaturizer(Featurizer):
     warmup: int = 0           # minimum timesteps before first valid output
@@ -434,11 +434,11 @@ Your strategy file MUST start with:
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 ```
-Then import from the local `playground/` package:
+Then import from the local `model_iteration_tool/` package:
 ```python
 import numpy as np
-from playground.featurizer import Featurizer, Predictor
-from playground.data import CausalView
+from model_iteration_tool.featurizer import Featurizer, Predictor
+from model_iteration_tool.data import CausalView
 ```
 
 You must define:
@@ -494,7 +494,7 @@ Only use this when the pre-cached data lacks fields you need.
 ## File Structure
 
 Your workspace contains:
-- `playground/` -- the framework source code (read-only reference)
+- `model_iteration_tool/` -- the framework source code (read-only reference)
 - `API_REFERENCE.md` -- this file
 - `GOAL.md` -- your research goal
 - `STATE.md` -- your persistent memory (read + update every iteration)
@@ -630,8 +630,8 @@ full_provider = DataProvider(data_all)'''
 _ws = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _ws)
 import numpy as np
-from playground import evaluate, DataProvider, fetch_assets
-from playground.evaluator import CHALLENGES, _generate_embeddings
+from model_iteration_tool import evaluate, DataProvider, fetch_assets
+from model_iteration_tool.evaluator import CHALLENGES, _generate_embeddings
 import importlib.util
 
 config = CHALLENGES["{challenge}"]
@@ -878,11 +878,11 @@ you do every iteration, BEFORE writing any code.
      import sys, os
      sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
      ```
-   - Import from local playground:
+   - Import from local model_iteration_tool:
      ```python
      import numpy as np
-     from playground.featurizer import Featurizer, Predictor
-     from playground.data import CausalView
+     from model_iteration_tool.featurizer import Featurizer, Predictor
+     from model_iteration_tool.data import CausalView
      ```
    - Must define `TechFeaturizer(Featurizer)` with `compute()` method
    - Must define `TechPredictor(Predictor)` with `predict()` returning shape ({dim},)
@@ -995,7 +995,7 @@ you do every iteration, BEFORE writing any code.
 
 ## Rules
 - ALL file operations must be within `{ws}/`
-- Do NOT modify `_eval_{iteration}.py` or any files in `playground/`
+- Do NOT modify `_eval_{iteration}.py` or any files in `model_iteration_tool/`
 - NEVER look at, analyze, or compute statistics on the last {holdout_days} days of data
 - Walk-forward metrics from eval are your REAL scores. Report them.
 - Do NOT report dev correlations as performance metrics
@@ -1027,7 +1027,7 @@ def _run_iteration(agent_id, config, iteration, prev_results, state, log_path,
     _write_history(workspace, challenge, prev_results)
     coinglass_key = config.get("coinglass_api_key") or os.environ.get("COINGLASS_API_KEY")
 
-    from playground.data_cache import is_cached, cache_dir_for
+    from model_iteration_tool.data_cache import is_cached, cache_dir_for
     data_cache_dir = str(cache_dir_for(days_back)) if is_cached(days_back) else None
     _write_eval_script(workspace, challenge, iteration, days_back,
                        coinglass_key=coinglass_key, data_cache_dir=data_cache_dir)
@@ -1296,7 +1296,7 @@ def run_agent(agent_id, config, agent_dir_override=None):
     signal.signal(signal.SIGTERM, _sigterm_handler)
     signal.signal(signal.SIGINT, _sigterm_handler)
 
-    from playground.evaluator import CHALLENGES
+    from model_iteration_tool.evaluator import CHALLENGES
     challenge = config.get("challenge", "")
     if challenge not in CHALLENGES:
         raise ValueError(f"Unknown challenge: {challenge!r}")
@@ -1331,13 +1331,13 @@ def run_agent(agent_id, config, agent_dir_override=None):
     _save_state(state, log_path)
 
     days_back = max(config.get("days_back", MIN_DAYS_BACK), MIN_DAYS_BACK)
-    from playground.data_cache import prefetch, is_cached
+    from model_iteration_tool.data_cache import prefetch, is_cached
     if not is_cached(days_back):
         print(f"[prefetch] Fetching {days_back}d data for all assets...", flush=True)
         coinglass_key = os.environ.get("COINGLASS_API_KEY", "")
         prefetch(days_back, coinglass_api_key=coinglass_key)
         print("[prefetch] Done.", flush=True)
-    from playground.data_cache import cache_dir_for
+    from model_iteration_tool.data_cache import cache_dir_for
     os.environ["MANTIS_DATA_CACHE"] = str(cache_dir_for(days_back))
 
     max_iters = config.get("max_iterations", 20)

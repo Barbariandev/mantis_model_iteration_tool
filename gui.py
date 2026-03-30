@@ -277,7 +277,7 @@ def _validate_agent_id(agent_id):
 
 # ---- container helpers ----
 
-from playground.sandbox import (
+from model_iteration_tool.sandbox import (
     ensure_image, launch_container, kill_container,
     container_running, running_count, MAX_RUNNING,
 )
@@ -329,7 +329,7 @@ def _launch_agent(agent_id, config):
             agent_id=agent_id,
             config=config,
             agent_dir=str(agent_dir),
-            playground_dir=str(Path(__file__).parent),
+            pkg_dir=str(Path(__file__).parent),
             data_dir=str(DATA_DIR),
             anthropic_key=ant_key,
             coinglass_key=cg_key,
@@ -581,7 +581,7 @@ CHALLENGE_DESCRIPTIONS = {
 
 def dashboard():
     summaries = _list_agents_summary()
-    from playground.evaluator import CHALLENGES
+    from model_iteration_tool.evaluator import CHALLENGES
     challenge_names = list(CHALLENGES.keys())
     challenge_metrics = {}
     challenge_info = {}
@@ -619,7 +619,7 @@ def agent_detail(agent_id):
 @app.route("/api/challenges", methods=["GET"])
 
 def api_list_challenges():
-    from playground.evaluator import CHALLENGES
+    from model_iteration_tool.evaluator import CHALLENGES
     result = {}
     for cname, cfg in CHALLENGES.items():
         desc = CHALLENGE_DESCRIPTIONS.get(cname, {})
@@ -667,7 +667,7 @@ def api_create_agent():
     if not challenge or not goal:
         return jsonify({"error": "challenge and goal required"}), 400
 
-    from playground.evaluator import CHALLENGES
+    from model_iteration_tool.evaluator import CHALLENGES
     if challenge not in CHALLENGES:
         return jsonify({"error": f"unknown challenge: {challenge}"}), 400
 
@@ -820,7 +820,7 @@ def _run_ask_claude(agent_id, question):
             return
         context = _build_agent_context(agent_id)
         system_prompt = (
-            "You are a research assistant analyzing an autonomous trading strategy agent. "
+            "You are a research assistant analyzing an autonomous prediction strategy agent. "
             "Answer the operator's question using the agent context below. Be concise and specific. "
             "Do not make up data -- only reference what is in the context."
         )
@@ -1132,7 +1132,7 @@ def api_delete_ant_key():
 @app.route("/api/data-cache", methods=["GET"])
 
 def api_data_cache_status():
-    from playground.data_cache import cache_dir_for, is_cached
+    from model_iteration_tool.data_cache import cache_dir_for, is_cached
     import time as _t
     results = {}
     for days in (60, 90, 120, 180):
@@ -1159,7 +1159,7 @@ def api_prefetch():
     cg_key = data.get("coinglass_key") or _get_coinglass_key()
     if cg_key and not _get_coinglass_key():
         _set_coinglass_key(cg_key)
-    from playground.data_cache import prefetch_background
+    from model_iteration_tool.data_cache import prefetch_background
     started = prefetch_background(days_back, coinglass_api_key=cg_key, force=True)
     if not started:
         return jsonify({"status": "already_running"}), 409
@@ -1169,7 +1169,7 @@ def api_prefetch():
 @app.route("/api/data-cache/status", methods=["GET"])
 
 def api_prefetch_status():
-    from playground.data_cache import get_prefetch_status
+    from model_iteration_tool.data_cache import get_prefetch_status
     return jsonify(get_prefetch_status())
 
 
@@ -1179,7 +1179,7 @@ def api_delete_cache():
     import shutil
     data = _safe_json_body()
     days_back = max(60, _safe_int(data.get("days_back"), 60))
-    from playground.data_cache import cache_dir_for, get_prefetch_status
+    from model_iteration_tool.data_cache import cache_dir_for, get_prefetch_status
     if get_prefetch_status().get("running"):
         return jsonify({"error": "Cannot delete while fetch is running"}), 409
     d = cache_dir_for(days_back)
@@ -1193,6 +1193,34 @@ def _graceful_shutdown(signum, _frame):
     sys.exit(0)
 
 
+def _token_strength_check(token):
+    """Refuse to start with a weak auth token."""
+    issues = []
+    if len(token) < 12:
+        issues.append(f"too short ({len(token)} chars, need >= 12)")
+    char_classes = sum([
+        any(c.islower() for c in token),
+        any(c.isupper() for c in token),
+        any(c.isdigit() for c in token),
+        any(not c.isalnum() for c in token),
+    ])
+    if char_classes < 2:
+        issues.append("needs at least 2 of: lowercase, uppercase, digits, symbols")
+    entropy = len(token) * math.log2(max(len(set(token)), 1))
+    if entropy < 40:
+        issues.append(f"too predictable (estimated {entropy:.0f} bits, need >= 40)")
+    if issues:
+        print("\n" + "!" * 60)
+        print("  REFUSED TO START -- weak MANTIS_AUTH_TOKEN")
+        for iss in issues:
+            print(f"    - {iss}")
+        print("")
+        print("  Generate a strong token:")
+        print('    export MANTIS_AUTH_TOKEN="$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")"')
+        print("!" * 60 + "\n")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default=os.environ.get("MANTIS_HOST", "127.0.0.1"))
@@ -1200,18 +1228,35 @@ if __name__ == "__main__":
     parser.add_argument("--workers", type=int, default=int(os.environ.get("MANTIS_WORKERS", "2")))
     args = parser.parse_args()
 
-    auth_configured = bool(os.environ.get("MANTIS_AUTH_TOKEN"))
+    auth_token = os.environ.get("MANTIS_AUTH_TOKEN", "")
+    auth_configured = bool(auth_token)
+
+    is_public = args.host not in ("127.0.0.1", "localhost")
+    if is_public and not auth_configured:
+        print("\n" + "!" * 60)
+        print("  REFUSED TO START")
+        print("  Binding to a non-localhost address without MANTIS_AUTH_TOKEN")
+        print("  is a security risk (bots WILL find you and burn API credits).")
+        print("")
+        print("  Either:")
+        print("    export MANTIS_AUTH_TOKEN=\"$(python3 -c \"import secrets; print(secrets.token_urlsafe(32))\")")
+        print("  Or bind to localhost only:")
+        print(f"    python -m model_iteration_tool.gui --host 127.0.0.1")
+        print("!" * 60 + "\n")
+        sys.exit(1)
+
+    if auth_configured:
+        _token_strength_check(auth_token)
 
     print(f"\n{'='*60}")
-    print(f"  MANTIS Agentic Mining")
+    print(f"  MANTIS Model Iteration Tool")
     print(f"  http://{args.host}:{args.port}/")
     print(f"{'='*60}")
     if auth_configured:
         print(f"  Auth: enabled (MANTIS_AUTH_TOKEN set)")
         print(f"  Browser: http://{args.host}:{args.port}/?token=<your-token>")
     else:
-        print(f"  Auth: DISABLED (set MANTIS_AUTH_TOKEN for production)")
-        print(f"  Access restricted to localhost only")
+        print(f"  Auth: localhost-only (set MANTIS_AUTH_TOKEN to expose publicly)")
     print(f"  Health: http://{args.host}:{args.port}/health (always public)")
     print(f"  Agents run in Docker containers (sandboxed, survive GUI restart)")
     print(f"  List containers: docker ps --filter name=mantis-")
@@ -1230,7 +1275,7 @@ if __name__ == "__main__":
             "--graceful-timeout=30",
             "--access-logfile=-",
             "--error-logfile=-",
-            "playground.gui:app",
+            "model_iteration_tool.gui:app",
         ]
         _gunicorn_run()
     else:

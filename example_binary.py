@@ -11,7 +11,7 @@ from sklearn.linear_model import RidgeClassifier
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from playground import Featurizer, Predictor, evaluate, DataProvider
+from model_iteration_tool import Featurizer, Predictor, evaluate, DataProvider
 
 LOOKBACK = 200
 TRAIN_WINDOW = 2000
@@ -147,7 +147,7 @@ class RidgePredictor(Predictor):
 
 
 if __name__ == "__main__":
-    from playground import fetch_assets
+    from model_iteration_tool import fetch_assets
 
     days = int(sys.argv[1]) if len(sys.argv) > 1 else 30
     print(f"Fetching ETH 1m candles from Binance ({days} days)...")

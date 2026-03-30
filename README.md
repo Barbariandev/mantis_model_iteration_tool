@@ -1,6 +1,6 @@
 # MANTIS Agentic Mining Playground
 
-Autonomous AI agents that research, code, and evaluate cryptocurrency predictive systems. Each agent runs Claude Code inside a sandboxed Docker container, iteratively building features, training models, and evaluating them with walk-forward backtesting and strict causal data access.
+Autonomous AI agents that research, code, and evaluate cryptocurrency prediction signal strategies. Each agent runs Claude Code inside a sandboxed Docker container, iteratively building features, training models, and evaluating them with walk-forward backtesting and strict causal data access.
 
 ## Prerequisites
 
@@ -25,8 +25,8 @@ pip install -r requirements.txt
 ## Starting the server
 
 ```bash
-# From the parent directory of playground/
-python -m playground.gui
+# From the parent directory of model_iteration_tool/
+python -m model_iteration_tool.gui
 ```
 
 The server starts at `http://127.0.0.1:8420`. Open it in a browser for the full GUI.
@@ -43,17 +43,19 @@ The server starts at `http://127.0.0.1:8420`. Open it in a browser for the full 
 | `MANTIS_CLAUDE_TIMEOUT` | `600` | Seconds before killing a Claude Code invocation |
 | `MANTIS_RATE_LIMIT_RPM` | `120` | API rate limit per IP (0 to disable) |
 | `MANTIS_LOG_LEVEL` | `INFO` | Python logging level |
-| `MANTIS_DATA_DIR` | `playground/.data` | Where cached market data is stored |
+| `MANTIS_DATA_DIR` | `model_iteration_tool/.data` | Where cached market data is stored |
 | `MANTIS_CONTAINER_MEM_PCT` | `15` | Per-container memory as % of system RAM (clamped 4-64 GB) |
 | `MANTIS_PAUSE_TIMEOUT` | `3600` | Seconds before a paused agent auto-resumes |
 
 ### Authentication
 
-Without `MANTIS_AUTH_TOKEN`, access is restricted to localhost. With it set:
+**The server refuses to start on `0.0.0.0` without `MANTIS_AUTH_TOKEN` set.** This prevents accidental public exposure that would let anyone create agents and burn your Anthropic API credits.
+
+Without `MANTIS_AUTH_TOKEN`, access is restricted to localhost. To expose publicly:
 
 ```bash
 export MANTIS_AUTH_TOKEN="your-secret-token"
-python -m playground.gui --host 0.0.0.0
+python -m model_iteration_tool.gui --host 0.0.0.0
 
 # Browser: http://your-host:8420/?token=your-secret-token
 # curl:    curl -H "Authorization: Bearer your-secret-token" http://your-host:8420/api/agents
@@ -127,7 +129,7 @@ Key endpoints:
 You can use the evaluation framework directly in Python:
 
 ```python
-from playground import Featurizer, Predictor, evaluate
+from model_iteration_tool import Featurizer, Predictor, evaluate
 import numpy as np
 
 class MyFeaturizer(Featurizer):
@@ -153,13 +155,13 @@ See [GUIDE.md](GUIDE.md) for the full SDK reference (CausalView API, embedding f
 ## Running tests
 
 ```bash
-python playground/test_playground.py
+python model_iteration_tool/test_model_iteration_tool.py
 ```
 
 ## Architecture
 
 ```
-playground/
+model_iteration_tool/
     gui.py              Web GUI + REST API (Flask/Gunicorn)
     sandbox.py          Docker container lifecycle
     agent_runner.py     Agent iteration loop (runs inside container)
@@ -170,7 +172,7 @@ playground/
     featurizer.py       Featurizer/Predictor base classes
     Dockerfile          Agent container image
     templates/          Jinja2 templates (SPA dashboard)
-    test_playground.py  Test suite
+    test_model_iteration_tool.py  Test suite
     example_binary.py   Example strategy
     GUIDE.md            SDK reference
     API_guide.md        HTTP API reference
