@@ -7,8 +7,8 @@ from sklearn.linear_model import LogisticRegression
 from scipy.stats import spearmanr
 from sklearn.metrics import roc_auc_score, log_loss
 
-from model_iteration_tool.data import DataProvider, BREAKOUT_ASSETS
-from model_iteration_tool.featurizer import Featurizer, Predictor
+from mantis_model_iteration_tool.data import DataProvider, BREAKOUT_ASSETS, FUNDING_ASSETS
+from mantis_model_iteration_tool.featurizer import Featurizer, Predictor
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,12 @@ CHALLENGES = {
         primary_asset="BTC", assets=list(BREAKOUT_ASSETS),
         embedding_dim=len(BREAKOUT_ASSETS), horizon=240,
         weight=3.0,
+    ),
+    "FUNDING-XSEC": ChallengeConfig(
+        name="FUNDING-XSEC", challenge_type="funding_xsec",
+        primary_asset="BTC", assets=list(FUNDING_ASSETS),
+        embedding_dim=len(FUNDING_ASSETS), horizon=480,
+        weight=4.0,
     ),
 }
 
@@ -713,12 +719,72 @@ def _evaluate_xsec(featurizer, predictor, provider, config, holdout_start=0):
     }
 
 
+def _evaluate_funding_xsec(featurizer, predictor, provider, config, holdout_start=0):
+    """Evaluate FUNDING-XSEC: predict which assets' funding rate changes
+    will exceed the cross-sectional median over the horizon.
+
+    Labels are based on funding rate *changes* (delta_f = f_{t+h} - f_t),
+    not levels, to remove autocorrelation. Scoring uses Spearman rank
+    correlation between predicted scores and actual funding deltas.
+    """
+    available = [a for a in config.assets if a in provider.assets]
+    if len(available) < 5:
+        return {"error": f"only {len(available)} funding assets available, need >= 5"}
+
+    horizon = config.horizon
+    funding_cols = []
+    for a in available:
+        try:
+            fr = provider.view(provider.length - 1).cg(a, "funding_1h")
+            if fr is not None and len(fr) >= provider.length:
+                funding_cols.append(fr[:provider.length])
+            else:
+                funding_cols.append(np.full(provider.length, np.nan))
+        except Exception:
+            funding_cols.append(np.full(provider.length, np.nan))
+
+    fm = np.column_stack(funding_cols)
+    T, N = fm.shape
+    if T <= horizon:
+        return {"error": "not enough funding data for horizon"}
+    n = T - horizon
+    f0 = fm[:n]
+    f1 = fm[horizon:horizon + n]
+    delta_f = f1 - f0
+    valid_mask = np.all(np.isfinite(delta_f), axis=1)
+
+    embeddings, warmup = _generate_embeddings(featurizer, predictor, provider)
+    if embeddings.shape[1] < len(available):
+        pad = np.zeros((embeddings.shape[0], len(available) - embeddings.shape[1]))
+        embeddings = np.hstack([embeddings, pad])
+    n_usable = min(n - warmup, len(embeddings))
+    if n_usable <= 0:
+        return {"error": "not enough data"}
+    emb = embeddings[:n_usable, :len(available)]
+    ret = delta_f[warmup:warmup + n_usable]
+    val = valid_mask[warmup:warmup + n_usable]
+    hs = max(0, holdout_start - warmup)
+    windows = _walk_forward_xsec_spearman(emb, ret, val, len(available), holdout_start=hs)
+    if not windows:
+        return {"error": "no valid walk-forward windows"}
+    holdout_windows = [w for w in windows if w.get("in_holdout")]
+    if not holdout_windows:
+        return {"error": "no walk-forward windows in holdout period"}
+    return {
+        "challenge": config.name, "type": "funding_xsec",
+        "n_assets": len(available), "n_timesteps": provider.length,
+        "n_usable": n_usable, "horizon": horizon, "windows": windows,
+        "mean_spearman": float(np.nanmean([w["mean_spearman"] for w in holdout_windows])),
+    }
+
+
 _DISPATCH = {
     "binary": _evaluate_binary,
     "hitfirst": _evaluate_hitfirst,
     "lbfgs": _evaluate_lbfgs,
     "breakout": _evaluate_breakout,
     "xsec_rank": _evaluate_xsec,
+    "funding_xsec": _evaluate_funding_xsec,
 }
 
 
@@ -735,7 +801,7 @@ def evaluate(challenge_name, featurizer, predictor, provider=None,
         raise ValueError(f"Unknown challenge {challenge_name!r}. Available: {list(CHALLENGES.keys())}")
     config = CHALLENGES[challenge_name]
     if provider is None:
-        from model_iteration_tool.data import fetch_assets
+        from mantis_model_iteration_tool.data import fetch_assets
         data, _ = fetch_assets(
             assets=config.assets, interval=interval, days_back=days_back)
         provider = DataProvider(data)

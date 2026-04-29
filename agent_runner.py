@@ -23,7 +23,6 @@ PKG_DIR = Path(__file__).parent
 WORKING_DIR = Path(__file__).parent.parent
 
 _AGENTS_DIR_OVERRIDE = os.environ.get("MANTIS_AGENT_DIR")
-_DATA_DIR_OVERRIDE = os.environ.get("MANTIS_DATA_DIR")
 AGENTS_DIR = Path(_AGENTS_DIR_OVERRIDE) if _AGENTS_DIR_OVERRIDE else PKG_DIR / "agents"
 
 if str(WORKING_DIR) not in sys.path:
@@ -79,6 +78,12 @@ CHALLENGE_META = {
         "direction": "higher is better",
         "all_metrics": ["mean_spearman"],
     },
+    "funding_xsec": {
+        "format": "[asset_0_score, asset_1_score, ...] -- higher = funding rate change above median",
+        "primary_metric": "mean_spearman",
+        "direction": "higher is better",
+        "all_metrics": ["mean_spearman"],
+    },
 }
 
 
@@ -88,7 +93,7 @@ def _setup_workspace(agent_dir):
     """Create an isolated workspace with a copy of the framework.
     Framework files are refreshed every call so agents get bug fixes."""
     workspace = agent_dir / "workspace"
-    pg_dest = workspace / "model_iteration_tool"
+    pg_dest = workspace / "mantis_model_iteration_tool"
     first_time = not pg_dest.exists()
     pg_dest.mkdir(parents=True, exist_ok=True)
 
@@ -146,7 +151,7 @@ def _claude_cmd(prompt):
 # ── Challenge helpers ────────────────────────────────────────────────────────
 
 def _challenge_info(challenge_name):
-    from model_iteration_tool.evaluator import CHALLENGES
+    from mantis_model_iteration_tool.evaluator import CHALLENGES
     cfg = CHALLENGES[challenge_name]
     meta = CHALLENGE_META[cfg.challenge_type]
     return cfg.embedding_dim, meta["format"], meta["primary_metric"], meta["direction"], meta["all_metrics"]
@@ -214,7 +219,7 @@ def _run_claude_once(cmd, env, cwd, on_activity=None, on_text=None,
     tokens_in = 0
     tokens_out = 0
     cost_usd = 0.0
-    timed_out = False
+    timed_out = ""
     wall_start = time.monotonic()
     last_activity = time.monotonic()
     _wall_limit = wall_timeout or ITER_WALL_TIMEOUT
@@ -246,12 +251,12 @@ def _run_claude_once(cmd, env, cwd, on_activity=None, on_text=None,
                     print(f"  wall-clock timeout: iteration exceeded {_wall_limit}s ({elapsed_wall:.0f}s elapsed), killing",
                           flush=True)
                     proc.kill()
-                    timed_out = True
+                    timed_out = "wall"
                     break
                 if time.monotonic() - last_activity > CLAUDE_TIMEOUT:
                     print(f"  claude timeout: no output for {CLAUDE_TIMEOUT}s, killing", flush=True)
                     proc.kill()
-                    timed_out = True
+                    timed_out = "idle"
                     break
                 if proc.poll() is not None:
                     break
@@ -272,7 +277,7 @@ def _run_claude_once(cmd, env, cwd, on_activity=None, on_text=None,
             if time.monotonic() - wall_start > _wall_limit:
                 print(f"  wall-clock timeout: iteration exceeded {_wall_limit}s, killing", flush=True)
                 proc.kill()
-                timed_out = True
+                timed_out = "wall"
                 break
 
             try:
@@ -377,136 +382,11 @@ def _write_api_reference(workspace):
     path = workspace / "API_REFERENCE.md"
     if path.exists():
         return
-    path.write_text("""# MANTIS Agentic Mining -- API Reference
-
-## Featurizer Interface
-
-```python
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import numpy as np
-from model_iteration_tool.featurizer import Featurizer, Predictor
-from model_iteration_tool.data import CausalView
-
-class TechFeaturizer(Featurizer):
-    warmup: int = 0           # minimum timesteps before first valid output
-    compute_interval: int = 1 # compute every N timesteps
-
-    def compute(self, view: CausalView) -> dict[str, np.ndarray]:
-        # Return dict of named feature arrays (any shape)
-        ...
-
-class TechPredictor(Predictor):
-    def predict(self, features: dict[str, np.ndarray]) -> np.ndarray:
-        # Return embedding array of shape (embedding_dim,)
-        ...
-```
-
-## CausalView API
-
-- `view.t` -> int: current timestep index
-- `view.assets` -> list[str]: loaded tickers
-- `view.prices(asset)` -> np.ndarray shape (t+1,): close prices 0..t
-- `view.ohlcv(asset)` -> np.ndarray shape (t+1, 5): open, high, low, close, volume columns
-- `view.prices_matrix()` -> np.ndarray shape (t+1, N): all assets' close prices
-
-### CoinGlass Derivatives Data (if loaded)
-
-- `view.has_cg()` -> bool: whether CoinGlass data is available
-- `view.cg_fields(asset)` -> list[str]: available field names for an asset
-- `view.cg(asset, field)` -> np.ndarray shape (t+1,): causally aligned feature
-
-Available fields (when CoinGlass API key is configured):
-- `oi_1h`, `oi_1d` -- aggregated open interest close (hourly/daily)
-- `funding_1h` -- funding rate close (hourly)
-- `liq_long_1h` -- long liquidation USD (hourly)
-- `liq_short_1h` -- short liquidation USD (hourly)
-- `ls_ratio_1h` -- global long/short account ratio (hourly)
-
-Each value is from the **last fully completed** candle. NaN where no completed candle exists.
-
-All returned arrays are **copies**. No future data is accessible.
-
-## Strategy File Requirements
-
-Your strategy file MUST start with:
-```python
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-```
-Then import from the local `model_iteration_tool/` package:
-```python
-import numpy as np
-from model_iteration_tool.featurizer import Featurizer, Predictor
-from model_iteration_tool.data import CausalView
-```
-
-You must define:
-- `TechFeaturizer(Featurizer)` with a `compute()` method
-- `TechPredictor(Predictor)` with a `predict()` method
-
-## Available Libraries
-
-numpy, scipy, sklearn, pandas, and standard library modules.
-
-## Dev / Eval Split
-
-Data is split into a **dev** period and an **eval holdout** (last 20 days).
-- You explore features and compute correlations using DEV data only.
-- Walk-forward evaluation runs on ALL data; the test windows fall in the holdout period.
-  The walk-forward metrics (the primary metric, etc.) ARE your real out-of-sample scores.
-  These are the numbers you should trust, report, and use to judge what works vs what doesn't.
-- `dev_emb_dim_N_corr` values are raw dev-period hints, NOT performance metrics. Ignore them
-  when deciding if a strategy is good -- only the walk-forward holdout metrics matter.
-- You must NEVER manually inspect, analyze, or compute statistics on the eval period.
-- If you write custom analysis scripts, truncate data to exclude the last 28800 minutes.
-
-## Custom Data (Advanced)
-
-You can fetch data from **any external API** and make it available in the evaluator.
-Place arrays in `custom_data/` in your workspace:
-
-**Option A -- per-asset directory:**
-```
-custom_data/BTC/my_sentiment.npy    # np.save(path, arr)
-custom_data/ETH/my_indicator.npy
-```
-
-**Option B -- per-asset npz:**
-```
-custom_data/BTC.npz    # np.savez(path, my_field1=arr1, my_field2=arr2)
-```
-
-Each array must be 1D float64, length matching the OHLCV data (1-minute resolution).
-The eval script automatically merges these into the CoinGlass layer. Access via:
-```python
-view.cg(asset, "my_sentiment")  # your custom field, causally sliced
-```
-
-**CRITICAL: YOU must ensure causal alignment.** Each value at minute `t` must only use
-data available at time `t`. Use last-completed-candle logic (e.g., for hourly data, the
-value at minute 61 is from the candle that closed at minute 60, NOT the candle closing
-at minute 120). Misaligned data = lookahead bias = fake performance.
-
-The dashboard flags iterations using custom data with a prominent warning banner.
-Only use this when the pre-cached data lacks fields you need.
-
-## File Structure
-
-Your workspace contains:
-- `model_iteration_tool/` -- the framework source code (read-only reference)
-- `API_REFERENCE.md` -- this file
-- `GOAL.md` -- your research goal
-- `STATE.md` -- your persistent memory (read + update every iteration)
-- `HISTORY.md` -- previous iteration results
-- `INSTRUCTIONS.md` -- what to do this iteration
-- `INBOX.md` -- messages from the human operator (if any)
-- `_eval_N.py` -- evaluation scripts (do NOT modify)
-- `iteration_N.py` -- your strategy files (you write these)
-- `_result_N.json` -- evaluation results (eval writes these)
-- `iteration_N_analysis.json` -- your analysis (you write these)
-- `custom_data/` -- optional: your custom data arrays (you create this)
-""")
+    template = PKG_DIR / "API_REFERENCE_TEMPLATE.md"
+    if template.exists():
+        path.write_text(template.read_text())
+    else:
+        path.write_text("# MANTIS API Reference\n\nTemplate file not found.\n")
 
 
 def _write_goal(workspace, goal):
@@ -569,14 +449,174 @@ def _write_history(workspace, challenge, prev_results):
     (workspace / "HISTORY.md").write_text("\n".join(parts))
 
 
+def _eval_print_results(result_file):
+    """Shared template tail: print result dict and file path."""
+    return f'''
+for k, v in sorted(result.items()):
+    if k not in ("windows",):
+        if isinstance(v, float):
+            print(f"  {{k}}: {{v:.6f}}")
+        else:
+            print(f"  {{k}}: {{v}}")
+print(f"\\nFull results written to: {result_file}")
+'''
+
+
+def _eval_result_push_template(iteration, strategy_file, result_file, *, remote=False):
+    """Generate the shared tail of an eval script: sanitize result, write JSON,
+    push into log.json under flock so the frontend picks it up instantly."""
+    extra_fields = '            "remote_eval": True,\n' if remote else ""
+    return f'''
+import math as _math
+def _nan_safe(o):
+    if isinstance(o, float) and (_math.isnan(o) or _math.isinf(o)):
+        return None
+    if isinstance(o, dict):
+        return {{{{k: _nan_safe(v) for k, v in o.items()}}}}
+    if isinstance(o, (list, tuple)):
+        return [_nan_safe(v) for v in o]
+    return o
+result = _nan_safe(result)
+
+result_path = os.path.join(_ws, "{result_file}")
+with open(result_path, "w") as f:
+    json.dump(result, f, indent=2, default=str)
+
+import datetime as _dt, tempfile as _tempfile, fcntl as _fcntl
+_log_path = os.path.join(_ws, "..", "log.json")
+_lock_path = _log_path + ".lock"
+if os.path.exists(_log_path):
+    _lk_fd = os.open(_lock_path, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        _fcntl.flock(_lk_fd, _fcntl.LOCK_EX)
+        with open(_log_path, "r") as _lf: _raw_log = _lf.read().strip()
+        try:
+            _log = json.loads(_raw_log) if _raw_log else {{{{}}}}
+        except (json.JSONDecodeError, ValueError):
+            _log = {{{{}}}}
+        _display_metrics = {{{{k: v for k, v in result.items() if k not in ("windows",)}}}}
+        _entry = {{{{
+            "iteration": {iteration},
+            "timestamp": _dt.datetime.now().isoformat(),
+            "metrics": _display_metrics,
+            "analysis": None,
+            "activity": [],
+            "thoughts": [],
+            "tokens": {{{{"input": 0, "output": 0, "cost": 0}}}},
+            "elapsed_s": 0,
+            "result_text": "",
+            "code_path": "{strategy_file}" if os.path.exists(os.path.join(_ws, "{strategy_file}")) else None,
+            "has_error": "error" in result,
+            "done_signal": False,
+            "timed_out": False,
+            "custom_data_used": _custom_data_used,
+            "custom_data_fields": _custom_data_fields if _custom_data_used else [],
+            "_partial": True,
+{extra_fields}        }}}}
+        _existing = [e for e in _log.get("iterations", []) if e.get("iteration") != {iteration}]
+        _existing.append(_entry)
+        _log["iterations"] = _existing
+        _log["last_updated"] = _dt.datetime.now().isoformat()
+        _log_dir = os.path.dirname(_log_path)
+        _tfd, _tmp = _tempfile.mkstemp(dir=_log_dir, suffix=".tmp")
+        with os.fdopen(_tfd, "w") as _wf:
+            json.dump(_log, _wf, indent=2, default=str)
+        os.replace(_tmp, _log_path)
+        print(">> Results pushed to log.json for frontend")
+    finally:
+        _fcntl.flock(_lk_fd, _fcntl.LOCK_UN)
+        os.close(_lk_fd)
+'''
+
+
+def _write_targon_eval_script(eval_path, workspace, challenge, iteration,
+                              strategy_file, result_file, days_back,
+                              holdout_days, targon_url, targon_api_key,
+                              coinglass_key=None):
+    """Write an eval script that sends strategy code to a remote Targon service."""
+    api_key_escaped = (targon_api_key or "").replace("\\", "\\\\").replace('"', '\\"')
+    url_escaped = targon_url.replace("\\", "\\\\").replace('"', '\\"')
+    cg_key_block = ""
+    if coinglass_key:
+        cg_key_block = f'coinglass_api_key = os.environ.get("COINGLASS_API_KEY", "")'
+
+    eval_path.write_text(f'''import sys, os, json, time, math
+_ws = os.path.dirname(os.path.abspath(__file__))
+
+strategy_path = os.path.join(_ws, "{strategy_file}")
+with open(strategy_path, "r") as _sf:
+    strategy_code = _sf.read()
+
+print("=== REMOTE EVALUATION (Targon) ===")
+print(f"  Sending strategy to remote evaluation service...")
+
+import requests as _req
+
+_url = os.environ.get("MANTIS_TARGON_URL", "{url_escaped}").rstrip("/")
+_api_key = os.environ.get("MANTIS_TARGON_API_KEY", "{api_key_escaped}")
+{cg_key_block}
+
+_headers = {{"Content-Type": "application/json"}}
+if _api_key:
+    _headers["Authorization"] = f"Bearer {{_api_key}}"
+
+_payload = {{
+    "strategy_code": strategy_code,
+    "challenge": "{challenge}",
+    "days_back": {days_back},
+    "holdout_days": {holdout_days},
+}}
+{('_payload["coinglass_api_key"] = coinglass_api_key' if coinglass_key else '')}
+
+_t0 = time.time()
+try:
+    _resp = _req.post(
+        f"{{_url}}/evaluate",
+        headers=_headers,
+        json=_payload,
+        timeout=600,
+    )
+    _elapsed = time.time() - _t0
+    print(f"  Remote eval returned {{_resp.status_code}} in {{_elapsed:.1f}}s")
+
+    if _resp.status_code == 401:
+        raise RuntimeError("Targon authentication failed -- check MANTIS_TARGON_API_KEY")
+    _resp.raise_for_status()
+    _body = _resp.json()
+
+    if _body.get("error"):
+        raise RuntimeError(f"Remote eval error: {{_body['error']}}")
+
+    result = _body.get("metrics", _body)
+    _remote_elapsed = _body.get("elapsed_s", _elapsed)
+    print(f"  Remote compute time: {{_remote_elapsed}}s")
+
+except _req.exceptions.Timeout:
+    result = {{"error": "Remote evaluation timed out after 600s"}}
+except _req.exceptions.ConnectionError as _ce:
+    result = {{"error": f"Cannot connect to Targon eval service: {{_ce}}"}}
+except Exception as _e:
+    result = {{"error": f"Remote evaluation failed: {{_e}}"}}
+
+result.setdefault("custom_data_used", False)
+_custom_data_used = result.get("custom_data_used", False)
+_custom_data_fields = result.get("custom_data_fields", [])
+''' + _eval_result_push_template(iteration, strategy_file, result_file, remote=True) + '''
+print("=== EVALUATION RESULTS ===")
+''' + _eval_print_results(result_file))
+
+    return eval_path
+
+
 def _write_eval_script(workspace, challenge, iteration, days_back, coinglass_key=None,
-                       holdout_days=EVAL_HOLDOUT_DAYS, data_cache_dir=None):
+                       holdout_days=EVAL_HOLDOUT_DAYS, data_cache_dir=None,
+                       targon_url=None, targon_api_key=None):
     """Write the evaluation script that Claude will run.
 
-    The script splits data into dev (first N-holdout) and eval (last holdout).
-    Walk-forward windows span all data, but only holdout-period windows
-    contribute to the reported headline metrics (mean_auc etc.).
-    Feature analysis is the agent's responsibility (written in analysis JSON).
+    If targon_url is set, generates a script that POSTs strategy code to
+    the remote Targon evaluation service instead of running locally.
+    Otherwise, the script splits data into dev/eval and runs walk-forward
+    evaluation locally.
     """
     if not (isinstance(challenge, str) and challenge.replace("-", "").isalnum()):
         raise ValueError(f"Bad challenge: {challenge}")
@@ -590,16 +630,29 @@ def _write_eval_script(workspace, challenge, iteration, days_back, coinglass_key
     eval_path = workspace / f"_eval_{iteration}.py"
     ws = str(workspace)
 
+    if targon_url:
+        return _write_targon_eval_script(
+            eval_path, workspace, challenge, iteration, strategy_file,
+            result_file, days_back, holdout_days, targon_url, targon_api_key,
+            coinglass_key)
+
     if data_cache_dir:
         cache_abs = str(data_cache_dir).replace("\\", "\\\\").replace('"', '\\"')
+        from mantis_model_iteration_tool.data_cache import DATA_DIR
+        data_dir_abs = str(DATA_DIR).replace("\\", "\\\\").replace('"', '\\"')
         fetch_block = f'''# Load from prefetched cache (shared across all agents)
 import pandas as _pd
 _cache_dir = os.environ.get("MANTIS_DATA_CACHE", "{cache_abs}")
+_csv_cache_dir = os.path.join("{data_dir_abs}", ".cache")
 data_all = {{}}
 for _asset in config.assets:
     _p = os.path.join(_cache_dir, "ohlcv", _asset + ".parquet")
     if os.path.exists(_p):
         data_all[_asset] = _pd.read_parquet(_p)
+    else:
+        _cp = os.path.join(_csv_cache_dir, _asset + "_1m_{days_back}d.csv")
+        if os.path.exists(_cp):
+            data_all[_asset] = _pd.read_csv(_cp, parse_dates=["timestamp"])
 if not data_all:
     raise RuntimeError("Prefetched data cache empty -- run data_cache.py first")
 coinglass_data = {{}}
@@ -630,8 +683,8 @@ full_provider = DataProvider(data_all)'''
 _ws = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _ws)
 import numpy as np
-from model_iteration_tool import evaluate, DataProvider, fetch_assets
-from model_iteration_tool.evaluator import CHALLENGES, _generate_embeddings
+from mantis_model_iteration_tool import evaluate, DataProvider, fetch_assets
+from mantis_model_iteration_tool.evaluator import CHALLENGES
 import importlib.util
 
 config = CHALLENGES["{challenge}"]
@@ -665,8 +718,8 @@ if os.path.isdir(_custom_dir):
             with np.load(_asset_path) as _npz:
                 for _k in _npz.files:
                     coinglass_data[_asset_name][_k] = _npz[_k]
-                _custom_data_fields.append(f"{{_asset_name}}/{{_k}}")
-                _custom_data_used = True
+                    _custom_data_fields.append(f"{{_asset_name}}/{{_k}}")
+                    _custom_data_used = True
     if _custom_data_used:
         print(f"CUSTOM DATA LOADED: {{len(_custom_data_fields)}} fields: {{_custom_data_fields}}")
         full_provider = DataProvider(data_all, coinglass=coinglass_data)
@@ -709,76 +762,11 @@ result["eval_holdout_minutes"] = total_len - dev_len
 result["custom_data_used"] = _custom_data_used
 if _custom_data_used:
     result["custom_data_fields"] = _custom_data_fields
-
-import math as _math
-def _nan_safe(o):
-    if isinstance(o, float) and (_math.isnan(o) or _math.isinf(o)):
-        return None
-    if isinstance(o, dict):
-        return {{k: _nan_safe(v) for k, v in o.items()}}
-    if isinstance(o, (list, tuple)):
-        return [_nan_safe(v) for v in o]
-    return o
-result = _nan_safe(result)
-result_path = os.path.join(_ws, "{result_file}")
-with open(result_path, "w") as f:
-    json.dump(result, f, indent=2, default=str)
-
-# Push results directly into log.json so the frontend picks them up immediately
-import datetime as _dt, tempfile as _tempfile, fcntl as _fcntl
-_log_path = os.path.join(_ws, "..", "log.json")
-_lock_path = _log_path + ".lock"
-if os.path.exists(_log_path):
-    _lk_fd = os.open(_lock_path, os.O_RDWR | os.O_CREAT, 0o644)
-    try:
-        _fcntl.flock(_lk_fd, _fcntl.LOCK_EX)
-        with open(_log_path, "r") as _lf: _raw_log = _lf.read().strip()
-        try:
-            _log = json.loads(_raw_log) if _raw_log else {{}}
-        except (json.JSONDecodeError, ValueError):
-            _log = {{}}
-        _display_metrics = {{k: v for k, v in result.items() if k not in ("windows",)}}
-        _entry = {{
-            "iteration": {iteration},
-            "timestamp": _dt.datetime.now().isoformat(),
-            "metrics": _display_metrics,
-            "analysis": None,
-            "activity": [],
-            "thoughts": [],
-            "tokens": {{"input": 0, "output": 0, "cost": 0}},
-            "elapsed_s": 0,
-            "result_text": "",
-            "code_path": "{strategy_file}" if os.path.exists(os.path.join(_ws, "{strategy_file}")) else None,
-            "has_error": "error" in result,
-            "done_signal": False,
-            "timed_out": False,
-            "custom_data_used": _custom_data_used,
-            "custom_data_fields": _custom_data_fields if _custom_data_used else [],
-            "_partial": True,
-        }}
-        _existing = [e for e in _log.get("iterations", []) if e.get("iteration") != {iteration}]
-        _existing.append(_entry)
-        _log["iterations"] = _existing
-        _log["last_updated"] = _dt.datetime.now().isoformat()
-        _log_dir = os.path.dirname(_log_path)
-        _tfd, _tmp = _tempfile.mkstemp(dir=_log_dir, suffix=".tmp")
-        with os.fdopen(_tfd, "w") as _wf:
-            json.dump(_log, _wf, indent=2, default=str)
-        os.replace(_tmp, _log_path)
-        print(">> Results pushed to log.json for frontend")
-    finally:
-        _fcntl.flock(_lk_fd, _fcntl.LOCK_UN)
-        os.close(_lk_fd)
-
+''' + _eval_result_push_template(iteration, strategy_file, result_file, remote=False) + f'''
 print("=== EVALUATION RESULTS ===")
 print(f"  dev_length: {{dev_len}} minutes ({{dev_len // 1440}} days)")
 print(f"  eval_holdout: {{total_len - dev_len}} minutes ({{(total_len - dev_len) // 1440}} days)")
-for k, v in sorted(result.items()):
-    if k not in ("windows",):
-        if isinstance(v, float):
-            print(f"  {{k}}: {{v:.6f}}")
-        else:
-            print(f"  {{k}}: {{v}}")
+''' + _eval_print_results(result_file) + f'''
 print(f"\\nFull results written to: {result_file}")
 ''')
     return eval_path
@@ -878,11 +866,11 @@ you do every iteration, BEFORE writing any code.
      import sys, os
      sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
      ```
-   - Import from local model_iteration_tool:
+   - Import from local mantis_model_iteration_tool:
      ```python
      import numpy as np
-     from model_iteration_tool.featurizer import Featurizer, Predictor
-     from model_iteration_tool.data import CausalView
+     from mantis_model_iteration_tool.featurizer import Featurizer, Predictor
+     from mantis_model_iteration_tool.data import CausalView
      ```
    - Must define `TechFeaturizer(Featurizer)` with `compute()` method
    - Must define `TechPredictor(Predictor)` with `predict()` returning shape ({dim},)
@@ -995,7 +983,7 @@ you do every iteration, BEFORE writing any code.
 
 ## Rules
 - ALL file operations must be within `{ws}/`
-- Do NOT modify `_eval_{iteration}.py` or any files in `model_iteration_tool/`
+- Do NOT modify `_eval_{iteration}.py` or any files in `mantis_model_iteration_tool/`
 - NEVER look at, analyze, or compute statistics on the last {holdout_days} days of data
 - Walk-forward metrics from eval are your REAL scores. Report them.
 - Do NOT report dev correlations as performance metrics
@@ -1027,10 +1015,19 @@ def _run_iteration(agent_id, config, iteration, prev_results, state, log_path,
     _write_history(workspace, challenge, prev_results)
     coinglass_key = config.get("coinglass_api_key") or os.environ.get("COINGLASS_API_KEY")
 
-    from model_iteration_tool.data_cache import is_cached, cache_dir_for
-    data_cache_dir = str(cache_dir_for(days_back)) if is_cached(days_back) else None
+    targon_url = config.get("targon_url") or os.environ.get("MANTIS_TARGON_URL", "")
+    targon_api_key = config.get("targon_api_key") or os.environ.get("MANTIS_TARGON_API_KEY", "")
+
+    if targon_url:
+        data_cache_dir = None
+    else:
+        from mantis_model_iteration_tool.data_cache import is_cached, cache_dir_for
+        data_cache_dir = str(cache_dir_for(days_back)) if is_cached(days_back) else None
+
     _write_eval_script(workspace, challenge, iteration, days_back,
-                       coinglass_key=coinglass_key, data_cache_dir=data_cache_dir)
+                       coinglass_key=coinglass_key, data_cache_dir=data_cache_dir,
+                       targon_url=targon_url or None,
+                       targon_api_key=targon_api_key or None)
     _write_instructions(workspace, challenge, iteration, min_iter, days_back=days_back)
 
     ws = str(workspace)
@@ -1112,7 +1109,10 @@ def _run_iteration(agent_id, config, iteration, prev_results, state, log_path,
         custom_data_fields = raw.pop("custom_data_fields", [])
         metrics = raw
     elif timed_out:
-        metrics = {"error": f"iteration killed: exceeded {ITER_WALL_TIMEOUT}s wall-clock limit"}
+        if timed_out == "idle":
+            metrics = {"error": f"iteration killed: no output for {CLAUDE_TIMEOUT}s (idle timeout)"}
+        else:
+            metrics = {"error": f"iteration killed: exceeded {ITER_WALL_TIMEOUT}s wall-clock limit"}
     else:
         metrics = {"error": "evaluation did not produce results"}
 
@@ -1142,7 +1142,7 @@ def _run_iteration(agent_id, config, iteration, prev_results, state, log_path,
         "code_path": f"iteration_{iteration}.py" if strategy_path.exists() else None,
         "has_error": has_error,
         "done_signal": done_signal,
-        "timed_out": timed_out,
+        "timed_out": bool(timed_out),
         "custom_data_used": custom_data_used,
         "custom_data_fields": custom_data_fields,
     }
@@ -1175,20 +1175,21 @@ def _sigterm_handler(signum, frame):
 
 # ── State management ─────────────────────────────────────────────────────────
 
-def _sanitize(obj):
-    if isinstance(obj, float) and (obj != obj or obj == float('inf') or obj == float('-inf')):
-        return None
-    if isinstance(obj, dict):
-        return {k: _sanitize(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_sanitize(v) for v in obj]
-    return obj
+try:
+    from mantis_model_iteration_tool.utils import (
+        sanitize_for_json as _sanitize,
+        atomic_json_write as _atomic_json_write,
+    )
+except ImportError:
+    from utils import (
+        sanitize_for_json as _sanitize,
+        atomic_json_write as _atomic_json_write,
+    )
 
 
 def _save_state(state, log_path):
-    import tempfile, fcntl
+    import fcntl
     state["last_updated"] = datetime.now().isoformat()
-    data = json.dumps(_sanitize(state), indent=2, default=str)
     log_path = Path(log_path)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = log_path.parent / (log_path.name + ".lock")
@@ -1196,15 +1197,7 @@ def _save_state(state, log_path):
     try:
         lock_fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o644)
         fcntl.flock(lock_fd, fcntl.LOCK_EX)
-        fd, tmp = tempfile.mkstemp(dir=str(log_path.parent), suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w") as f:
-                f.write(data)
-            os.replace(tmp, str(log_path))
-        except BaseException:
-            if os.path.exists(tmp):
-                os.unlink(tmp)
-            raise
+        _atomic_json_write(log_path, _sanitize(state))
     finally:
         if lock_fd >= 0:
             fcntl.flock(lock_fd, fcntl.LOCK_UN)
@@ -1217,46 +1210,12 @@ def _chat_path(agent_dir):
     return agent_dir / "chat.json"
 
 
-def _load_chat(agent_dir):
-    p = _chat_path(agent_dir)
-    if p.exists():
-        raw = p.read_text().strip()
-        if raw:
-            try:
-                return json.loads(raw)
-            except (json.JSONDecodeError, ValueError):
-                pass
-    return []
-
-
 def _append_chat(agent_dir, role, text):
-    import tempfile, fcntl
-    p = _chat_path(agent_dir)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    lock_path = p.parent / (p.name + ".lock")
-    lock_fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o644)
     try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX)
-        msgs = []
-        if p.exists():
-            raw = p.read_text().strip()
-            if raw:
-                try:
-                    msgs = json.loads(raw)
-                except (json.JSONDecodeError, ValueError):
-                    msgs = []
-        msgs.append({
-            "role": role,
-            "text": text,
-            "ts": datetime.now().isoformat(),
-        })
-        fd, tmp = tempfile.mkstemp(dir=str(p.parent), suffix=".tmp")
-        with os.fdopen(fd, "w") as f:
-            f.write(json.dumps(msgs, indent=2))
-        os.replace(tmp, str(p))
-    finally:
-        fcntl.flock(lock_fd, fcntl.LOCK_UN)
-        os.close(lock_fd)
+        from mantis_model_iteration_tool.utils import chat_append
+    except ImportError:
+        from utils import chat_append
+    chat_append(_chat_path(agent_dir), role, text)
 
 
 def _check_pause(agent_dir):
@@ -1290,13 +1249,53 @@ def _wait_for_unpause(agent_id, agent_dir, state, log_path):
     print(f"[agent] resumed", flush=True)
 
 
+# ── Model archival ────────────────────────────────────────────────────────
+
+ARTIFACTS_MODELS_DIR = PKG_DIR / "artifacts" / "models"
+
+
+def _archive_iteration_model(agent_id: str, agent_dir: Path,
+                              iteration: int, entry: dict, *,
+                              challenge: str = ""):
+    """Copy a successful iteration's strategy file to artifacts/models/.
+
+    Preserves models locally so the miner can function even if the
+    original agent workspace or Targon instance is gone.
+    """
+    if entry.get("has_error") or entry.get("code_path") is None:
+        return
+
+    src = agent_dir / "workspace" / f"iteration_{iteration}.py"
+    if not src.exists():
+        return
+
+    dest_dir = ARTIFACTS_MODELS_DIR / agent_id
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"iteration_{iteration}.py"
+
+    try:
+        shutil.copy2(src, dest)
+        meta = {
+            "agent_id": agent_id,
+            "iteration": iteration,
+            "challenge": challenge,
+            "timestamp": entry.get("timestamp", ""),
+            "metrics": entry.get("metrics", {}),
+        }
+        meta_path = dest_dir / f"iteration_{iteration}_meta.json"
+        meta_path.write_text(json.dumps(meta, indent=2) + "\n")
+        print(f"[iter {iteration}] model archived → {dest}", flush=True)
+    except Exception as exc:
+        print(f"[iter {iteration}] WARNING: failed to archive model: {exc}", flush=True)
+
+
 # ── Main agent loop ──────────────────────────────────────────────────────────
 
 def run_agent(agent_id, config, agent_dir_override=None):
     signal.signal(signal.SIGTERM, _sigterm_handler)
     signal.signal(signal.SIGINT, _sigterm_handler)
 
-    from model_iteration_tool.evaluator import CHALLENGES
+    from mantis_model_iteration_tool.evaluator import CHALLENGES
     challenge = config.get("challenge", "")
     if challenge not in CHALLENGES:
         raise ValueError(f"Unknown challenge: {challenge!r}")
@@ -1331,13 +1330,13 @@ def run_agent(agent_id, config, agent_dir_override=None):
     _save_state(state, log_path)
 
     days_back = max(config.get("days_back", MIN_DAYS_BACK), MIN_DAYS_BACK)
-    from model_iteration_tool.data_cache import prefetch, is_cached
+    from mantis_model_iteration_tool.data_cache import prefetch, is_cached
     if not is_cached(days_back):
         print(f"[prefetch] Fetching {days_back}d data for all assets...", flush=True)
         coinglass_key = os.environ.get("COINGLASS_API_KEY", "")
         prefetch(days_back, coinglass_api_key=coinglass_key)
         print("[prefetch] Done.", flush=True)
-    from model_iteration_tool.data_cache import cache_dir_for
+    from mantis_model_iteration_tool.data_cache import cache_dir_for
     os.environ["MANTIS_DATA_CACHE"] = str(cache_dir_for(days_back))
 
     max_iters = config.get("max_iterations", 20)
@@ -1384,6 +1383,9 @@ def run_agent(agent_id, config, agent_dir_override=None):
 
             state["iterations"].append(entry)
             _save_state(state, log_path)
+
+            _archive_iteration_model(agent_id, agent_dir, iteration, entry,
+                                        challenge=challenge)
 
             if _check_pause(agent_dir):
                 _wait_for_unpause(agent_id, agent_dir, state, log_path)

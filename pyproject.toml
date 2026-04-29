@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mantis-model-iteration-tool"
+version = "0.1.0"
+description = "Agentic crypto signal research and walk-forward evaluation toolkit."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "MANTIS" }]
+keywords = ["agents", "crypto", "machine-learning", "walk-forward", "evaluation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "flask>=3.0",
+    "gunicorn>=22.0",
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "scipy>=1.14",
+    "scikit-learn>=1.5",
+    "requests>=2.32",
+    "pyarrow>=17.0",
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+    "ruff>=0.6",
+]
+miner = [
+    "boto3>=1.35",
+    "bittensor>=7.0",
+    "cryptography>=42.0",
+]
+targon = [
+    "boto3>=1.35",
+    "bittensor>=7.0",
+    "cryptography>=42.0",
+    "targon-sdk",
+]
+
+[project.urls]
+Homepage = "https://github.com/mantis-subnet/mantis-model-iteration-tool"
+Issues = "https://github.com/mantis-subnet/mantis-model-iteration-tool/issues"
+
+[project.scripts]
+mantis-gui = "mantis_model_iteration_tool.gui:main"
+
+[tool.setuptools]
+packages = ["mantis_model_iteration_tool", "mantis_model_iteration_tool.targon_eval"]
+package-dir = { "mantis_model_iteration_tool" = "." }
+include-package-data = true
+
+[tool.setuptools.package-data]
+mantis_model_iteration_tool = ["templates/*.html", "targon_eval/*.md", "targon_eval/Dockerfile"]
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+python_files = ["test_*.py"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = ["agents", "artifacts", ".cache", ".data", ".miner"]
+
+[tool.ruff.lint]
+# Keep CI focused on syntax errors and undefined names for the public launch.
+# The existing codebase has a style backlog that should be cleaned up separately.
+select = ["E9", "F63", "F7", "F82"]

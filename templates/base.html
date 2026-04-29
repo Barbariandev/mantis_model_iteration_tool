@@ -14,7 +14,8 @@ const THEMES = {
         accent: "#00ff41", accentDim: "rgba(0,255,65,0.08)",
         green: "#00ff41", greenDim: "rgba(0,255,65,0.08)",
         red: "#ff3333", redDim: "rgba(255,51,51,0.10)",
-        amber: "#ffaa00", selection: "rgba(0,255,65,0.25)",
+        amber: "#ffaa00", cyan: "#00ff88", cyanDim: "rgba(0,255,136,0.12)",
+        selection: "rgba(0,255,65,0.25)",
         btnPrimaryText: "#000", btnPrimaryHover: "#00cc33",
         radius: "2px", radiusSm: "1px",
         font: '"SF Mono","Fira Code","JetBrains Mono","Cascadia Code","Consolas",monospace',
@@ -30,7 +31,8 @@ const THEMES = {
         accent: "#ffffff", accentDim: "rgba(255,255,255,0.06)",
         green: "#cccccc", greenDim: "rgba(255,255,255,0.06)",
         red: "#ff4444", redDim: "rgba(255,68,68,0.10)",
-        amber: "#ccaa00", selection: "rgba(255,255,255,0.2)",
+        amber: "#ccaa00", cyan: "#8ecae6", cyanDim: "rgba(142,202,230,0.12)",
+        selection: "rgba(255,255,255,0.2)",
         btnPrimaryText: "#000", btnPrimaryHover: "#dddddd",
         radius: "2px", radiusSm: "1px",
         font: '"SF Mono","Fira Code","JetBrains Mono","Cascadia Code","Consolas",monospace',
@@ -46,7 +48,8 @@ const THEMES = {
         accent: "#818cf8", accentDim: "rgba(129,140,248,0.12)",
         green: "#6ee7b7", greenDim: "rgba(110,231,183,0.12)",
         red: "#fca5a5", redDim: "rgba(252,165,165,0.10)",
-        amber: "#fcd34d", selection: "rgba(129,140,248,0.3)",
+        amber: "#fcd34d", cyan: "#67e8f9", cyanDim: "rgba(103,232,249,0.12)",
+        selection: "rgba(129,140,248,0.3)",
         btnPrimaryText: "#fff", btnPrimaryHover: "#6b76e0",
         radius: "12px", radiusSm: "8px",
         font: '-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",system-ui,sans-serif',
@@ -62,7 +65,8 @@ const THEMES = {
         accent: "#ffb000", accentDim: "rgba(255,176,0,0.08)",
         green: "#ffb000", greenDim: "rgba(255,176,0,0.08)",
         red: "#ff4444", redDim: "rgba(255,68,68,0.10)",
-        amber: "#ffb000", selection: "rgba(255,176,0,0.25)",
+        amber: "#ffb000", cyan: "#ffcc44", cyanDim: "rgba(255,204,68,0.12)",
+        selection: "rgba(255,176,0,0.25)",
         btnPrimaryText: "#000", btnPrimaryHover: "#dd9900",
         radius: "2px", radiusSm: "1px",
         font: '"SF Mono","Fira Code","JetBrains Mono","Cascadia Code","Consolas",monospace',
@@ -90,6 +94,8 @@ function applyTheme(name) {
     r.style.setProperty("--red", t.red);
     r.style.setProperty("--red-dim", t.redDim);
     r.style.setProperty("--amber", t.amber);
+    r.style.setProperty("--cyan", t.cyan);
+    r.style.setProperty("--cyan-dim", t.cyanDim);
     r.style.setProperty("--selection", t.selection);
     r.style.setProperty("--btn-primary-text", t.btnPrimaryText);
     r.style.setProperty("--btn-primary-hover", t.btnPrimaryHover);
@@ -111,7 +117,7 @@ function applyTheme(name) {
 }
 
 (function() {
-    var saved = localStorage.getItem("mantis-theme") || "mono";
+    var saved = localStorage.getItem("mantis-theme") || "classic";
     var t = THEMES[saved] || THEMES.mono;
     var r = document.documentElement;
     r.style.setProperty("--bg", t.bg);
@@ -129,6 +135,8 @@ function applyTheme(name) {
     r.style.setProperty("--red", t.red);
     r.style.setProperty("--red-dim", t.redDim);
     r.style.setProperty("--amber", t.amber);
+    r.style.setProperty("--cyan", t.cyan);
+    r.style.setProperty("--cyan-dim", t.cyanDim);
     r.style.setProperty("--selection", t.selection);
     r.style.setProperty("--btn-primary-text", t.btnPrimaryText);
     r.style.setProperty("--btn-primary-hover", t.btnPrimaryHover);
@@ -157,6 +165,8 @@ function applyTheme(name) {
     --red: #ff4444;
     --red-dim: rgba(255,68,68,0.10);
     --amber: #ccaa00;
+    --cyan: #8ecae6;
+    --cyan-dim: rgba(142,202,230,0.12);
     --selection: rgba(255,255,255,0.2);
     --btn-primary-text: #000;
     --btn-primary-hover: #dddddd;
@@ -179,18 +189,30 @@ body.theme-classic a:hover { text-decoration: none; opacity: 0.85; }
 nav {
     background: var(--bg);
     border-bottom: 1px solid var(--border);
-    padding: 10px 20px; display: flex; align-items: center; gap: 24px;
+    padding: 10px 20px; display: flex; align-items: center; gap: 0;
     position: sticky; top: 0; z-index: 100;
 }
 body.theme-classic nav { background: rgba(12,12,15,0.8); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
 nav .brand {
     font-size: 14px; font-weight: 700; color: var(--accent);
-    letter-spacing: 0.1em;
+    letter-spacing: 0.1em; margin-right: 24px;
 }
 body.theme-uppercase nav .brand { text-transform: uppercase; }
+nav .nav-primary { display: flex; gap: 20px; }
+nav .nav-right { margin-left: auto; display: flex; gap: 16px; align-items: center; }
 nav a { color: var(--text-secondary); font-size: 12px; }
 nav a:hover { color: var(--accent); text-decoration: none; }
 nav a.nav-active { color: var(--accent); }
+.nav-dropdown { position: relative; }
+.nav-dropdown-trigger { cursor: pointer; color: var(--text-secondary); font-size: 12px; user-select: none; display: flex; align-items: center; gap: 3px; }
+.nav-dropdown-trigger:hover { color: var(--accent); }
+.nav-dropdown-trigger.nav-active { color: var(--accent); }
+.nav-dropdown-menu { display: none; position: absolute; top: calc(100% + 8px); left: 0; min-width: 150px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 0; z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+.nav-dropdown.open .nav-dropdown-menu { display: block; }
+.nav-dropdown-menu a { display: block; padding: 7px 14px; font-size: 11px; color: var(--text-secondary); }
+.nav-dropdown-menu a:hover { background: var(--accent-dim); color: var(--accent); }
+.nav-dropdown-menu a.nav-active { color: var(--accent); }
+body.theme-classic .nav-dropdown-menu { border-radius: var(--radius-sm); }
 
 h2 { font-size: 16px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; }
 h3 { font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 6px; letter-spacing: 0.03em; }
@@ -200,11 +222,11 @@ body.theme-classic h3 { font-size: 16px; color: var(--text); letter-spacing: -0.
 
 .card {
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 12px; margin-bottom: 6px;
-    transition: border-color 0.15s;
+    border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 .card:hover { border-color: var(--border-hover); }
-body.theme-classic .card { padding: 20px; margin-bottom: 12px; }
+body.theme-classic .card { padding: 24px; margin-bottom: 16px; }
 
 .badge {
     display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 1px;
@@ -239,11 +261,17 @@ body.theme-classic .badge-starting { border: none; }
     background: transparent; color: var(--accent);
 }
 body.theme-uppercase .btn { text-transform: uppercase; }
-.btn:hover { background: var(--accent-dim); }
+.btn:hover { background: var(--accent-dim); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
 .btn-primary { background: var(--accent); color: var(--btn-primary-text); border-color: var(--accent); }
-.btn-primary:hover { background: var(--btn-primary-hover); border-color: var(--btn-primary-hover); }
+.btn-primary:hover { background: var(--btn-primary-hover); border-color: var(--btn-primary-hover); transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); }
 .btn-danger { background: transparent; color: var(--red); border-color: var(--red); }
 .btn-danger:hover { background: var(--red-dim); }
+.btn-cyan { background: var(--cyan-dim); color: var(--cyan); border-color: var(--cyan); }
+.btn-cyan:hover { background: var(--cyan); color: var(--bg); }
+.btn-warning { background: rgba(245,158,11,0.12); color: var(--amber); border-color: var(--amber); }
+.btn-warning:hover { background: var(--amber); color: var(--bg); }
 .btn-sm { padding: 4px 10px; font-size: 10px; }
 body.theme-classic .btn { border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; padding: 8px 18px; letter-spacing: 0; text-transform: none; }
 body.theme-classic .btn-primary { color: #fff; }
@@ -253,9 +281,13 @@ body.theme-classic .btn-sm { padding: 5px 12px; font-size: 12px; }
 input, select, textarea {
     background: var(--bg); border: 1px solid var(--border); color: var(--accent);
     border-radius: var(--radius); padding: 8px 10px; font-size: 12px; width: 100%;
-    font-family: inherit; transition: border-color 0.15s;
+    font-family: inherit; transition: border-color 0.15s, box-shadow 0.15s;
+}
+input[type="checkbox"], input[type="radio"] {
+    width: auto; padding: 0; border: revert; background: revert; border-radius: revert;
 }
 input:focus, select:focus, textarea:focus { border-color: var(--accent); outline: none; box-shadow: var(--focus-glow); }
+input:hover, select:hover, textarea:hover { border-color: var(--text-tertiary); }
 input::placeholder, textarea::placeholder { color: var(--text-tertiary); }
 select { color: var(--accent); }
 select option { background: var(--bg); color: var(--accent); }
@@ -273,10 +305,32 @@ body.theme-classic label { font-size: 13px; font-weight: 500; letter-spacing: 0;
 .text-muted { color: var(--text-secondary); }
 .text-tertiary { color: var(--text-tertiary); }
 .text-sm { font-size: 11px; }
+.text-xs { font-size: 9px; }
+.text-accent { color: var(--accent); }
+.text-green { color: var(--green); }
+.text-red { color: var(--red); }
+.text-cyan { color: var(--cyan); }
+.fw-700 { font-weight: 700; }
+.mt-1 { margin-top: 6px; }
 .mt-2 { margin-top: 12px; }
+.mt-3 { margin-top: 18px; }
+.mb-1 { margin-bottom: 6px; }
 .mb-2 { margin-bottom: 12px; }
+.mb-3 { margin-bottom: 18px; }
 .flex { display: flex; gap: 10px; align-items: center; }
 .flex-between { display: flex; justify-content: space-between; align-items: center; }
+.flex-col { display: flex; flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+.gap-sm { gap: 6px; }
+.gap-md { gap: 10px; }
+.gap-lg { gap: 16px; }
+.label-caps { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-tertiary); }
+.border-left-accent { border-left: 2px solid var(--accent); }
+.border-left-green { border-left: 2px solid var(--green); }
+.border-left-red { border-left: 2px solid var(--red); }
+.border-left-cyan { border-left: 2px solid var(--cyan); }
+.w-full { width: 100%; }
+.mono { font-family: var(--font-body); }
 pre {
     background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
     padding: 12px; overflow-x: auto; font-size: 11px; line-height: 1.5;
@@ -306,10 +360,23 @@ body.scanlines::before {
 </head>
 <body>
 <nav>
-    <span class="brand">[MANTIS Agentic Mining]</span>
-    <a href="#" class="nav-tab" data-view="dashboard" id="nav-dash">&gt; dashboard</a>
-    <a href="#" class="nav-tab" data-view="guide" id="nav-guide">&gt; guide</a>
-    <a href="#" class="nav-tab" data-view="settings" id="nav-settings">&gt; settings</a>
+    <span class="brand">[MANTIS]</span>
+    <div class="nav-primary">
+        <a href="#" class="nav-tab" data-view="dashboard" id="nav-dash">dashboard</a>
+        <a href="#" class="nav-tab" data-view="miner" id="nav-miner">miner</a>
+        <div class="nav-dropdown" id="nav-tools-dropdown">
+            <span class="nav-dropdown-trigger" id="nav-tools-trigger" onclick="document.getElementById('nav-tools-dropdown').classList.toggle('open')">tools <span style="font-size:8px;">&#9662;</span></span>
+            <div class="nav-dropdown-menu">
+                <a href="#" class="nav-tab" data-view="salience" id="nav-salience">salience</a>
+                <a href="#" class="nav-tab" data-view="sandbox" id="nav-sandbox">sandbox</a>
+                <a href="#" class="nav-tab" data-view="targon" id="nav-targon">execution</a>
+            </div>
+        </div>
+    </div>
+    <div class="nav-right">
+        <a href="#" class="nav-tab" data-view="guide" id="nav-guide">guide</a>
+        <a href="#" class="nav-tab" data-view="settings" id="nav-settings">&#9881;</a>
+    </div>
 </nav>
 <div class="container">
 {% block content %}{% endblock %}
@@ -317,8 +384,13 @@ body.scanlines::before {
 {% block scripts %}{% endblock %}
 <script>
 applyTheme(window.__earlyTheme || localStorage.getItem("mantis-theme") || "mono");
+document.addEventListener("click",function(e){
+    var dd=document.getElementById("nav-tools-dropdown");
+    if(dd&&!dd.contains(e.target))dd.classList.remove("open");
+});
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous" async onload="window.__chartReady=true"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js" crossorigin="anonymous" async></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js" integrity="sha384-qOkzR5Ke/XkQxuGVJ9hpFEpDlcoLtWwVYhnJf06cLIZa2vaIptSqaubivErzmD5O" crossorigin="anonymous" async onload="if(window.__nnInit)window.__nnInit()"></script>
 </body>
 </html>

@@ -88,7 +88,7 @@ def _fetch_coinglass(endpoint, params, api_key, cache_dir=None):
         except ValueError:
             logger.warning("CoinGlass %s: non-JSON response", endpoint)
             return []
-        if body.get("code") != "0":
+        if str(body.get("code", "")) != "0":
             logger.warning("CoinGlass %s error: %s", endpoint, body.get("msg", ""))
             return []
         data = body.get("data", [])
@@ -294,6 +294,8 @@ def fetch_coinglass_features(asset, minute_timestamps_ms, api_key,
         return {}
     start_ms = int(minute_timestamps_ms[0]) - 2 * 86_400_000
     end_ms = int(minute_timestamps_ms[-1])
+    logger.info("CoinGlass fetch %s: start=%d end=%d len=%d",
+                asset, start_ms, end_ms, len(minute_timestamps_ms))
 
     features = {}
 

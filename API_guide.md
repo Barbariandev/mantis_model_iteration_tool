@@ -1,10 +1,10 @@
-# MANTIS HTTP API Reference
+# MANTIS model iteration tool HTTP API Reference
 
 All endpoints return JSON. State-changing requests (`POST`, `DELETE`) require `Content-Type: application/json`.
 
 ## Authentication
 
-If `MANTIS_AUTH_TOKEN` is set, every request (except `/health`) must include the token via one of:
+For the local GUI/API, if `MANTIS_AUTH_TOKEN` is set, every request (except `/health`) must include the token via one of:
 
 - **Bearer header**: `Authorization: Bearer <token>`
 - **Cookie**: `mantis_token=<token>` (set automatically on first browser visit with `?token=`)
@@ -12,13 +12,19 @@ If `MANTIS_AUTH_TOKEN` is set, every request (except `/health`) must include the
 
 Without `MANTIS_AUTH_TOKEN`, access is restricted to localhost (`127.0.0.1` / `::1`).
 
+Remote services fail closed by default:
+
+- The Targon agent server requires `MANTIS_SERVER_AUTH_KEY` and `Authorization: Bearer <token>` on protected routes.
+- The remote evaluation service requires `MANTIS_EVAL_API_KEY` and `Authorization: Bearer <token>` on eval/cache routes.
+- Their `/health` routes are public but intentionally low-detail.
+
 ---
 
 ## Health
 
 ### `GET /health`
 
-Always public (no auth required). Returns server health and agent count.
+Always public (no auth required). The local GUI returns server health and agent count. Remote Targon/eval health routes return only low-sensitivity status and auth configuration state.
 
 ```bash
 curl http://localhost:8420/health

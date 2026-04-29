@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
-from model_iteration_tool.data import CausalView
+from mantis_model_iteration_tool.data import CausalView
 
 
 class Featurizer(ABC):

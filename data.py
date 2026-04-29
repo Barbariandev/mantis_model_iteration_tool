@@ -8,7 +8,12 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-BINANCE_API = "https://api.binance.com"
+BINANCE_ENDPOINTS = [
+    "https://api.binance.com",
+    "https://api1.binance.com",
+    "https://api.binance.us",
+]
+_binance_api_cache: str | None = None
 
 TICKER_TO_SYMBOL = {
     "BTC": "BTCUSDT", "ETH": "ETHUSDT", "XRP": "XRPUSDT",
@@ -30,9 +35,38 @@ BREAKOUT_ASSETS = [
     "NEAR", "ICP", "ETC", "ONDO",
 ]
 
+FUNDING_ASSETS = [
+    "BTC", "ETH", "SOL", "XRP", "DOGE", "ADA", "AVAX", "LINK", "DOT", "SUI",
+    "NEAR", "AAVE", "UNI", "LTC", "HBAR", "PEPE", "TRX", "SHIB", "TAO", "ONDO",
+]
+
+
+def _resolve_binance_api() -> str:
+    """Pick a working Binance API endpoint, caching the result."""
+    global _binance_api_cache
+    if _binance_api_cache:
+        return _binance_api_cache
+    override = os.environ.get("BINANCE_API_URL")
+    if override:
+        _binance_api_cache = override.rstrip("/")
+        return _binance_api_cache
+    for ep in BINANCE_ENDPOINTS:
+        try:
+            r = requests.get(f"{ep}/api/v3/ping", timeout=5)
+            if r.status_code == 200:
+                logger.info("Using Binance endpoint: %s", ep)
+                _binance_api_cache = ep
+                return ep
+            logger.info("Binance %s returned HTTP %d, trying next", ep, r.status_code)
+        except requests.RequestException:
+            logger.info("Binance %s unreachable, trying next", ep)
+    _binance_api_cache = BINANCE_ENDPOINTS[0]
+    return _binance_api_cache
+
 
 def fetch_klines(symbol, interval="1m", start_ms=None, end_ms=None):
-    url = f"{BINANCE_API}/api/v3/klines"
+    api_base = _resolve_binance_api()
+    url = f"{api_base}/api/v3/klines"
     rows = []
     retries_429 = 0
     max_retries_429 = 5
@@ -74,7 +108,7 @@ def fetch_klines(symbol, interval="1m", start_ms=None, end_ms=None):
             break
         if len(data) < 1000:
             break
-        _time.sleep(0.05)
+        _time.sleep(0.2 if "binance.us" in api_base else 0.05)
 
     if not rows:
         return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
@@ -136,11 +170,12 @@ def fetch_assets(assets=None, interval="1m", days_back=90, cache_dir=None,
         os.replace(tmp_path, cache_path)
         logger.info("Fetched %s: %d rows", asset, len(df))
         result[asset] = df
+        _time.sleep(1)
 
     if not coinglass_api_key:
         return result, {}
 
-    from model_iteration_tool.coinglass import fetch_coinglass_features
+    from mantis_model_iteration_tool.coinglass import fetch_coinglass_features
 
     min_len = min(len(df) for df in result.values()) if result else 0
     if min_len == 0:
@@ -149,7 +184,9 @@ def fetch_assets(assets=None, interval="1m", days_back=90, cache_dir=None,
     ref_asset = next(iter(result))
     ref_df = result[ref_asset].iloc[:min_len]
     if "timestamp" in ref_df.columns:
-        minute_ts = (pd.to_datetime(ref_df["timestamp"]).astype(np.int64) // 10**6).values
+        _epoch = pd.Timestamp("1970-01-01", tz="UTC")
+        _ts = pd.to_datetime(ref_df["timestamp"], utc=True)
+        minute_ts = ((_ts - _epoch).dt.total_seconds() * 1000).astype(np.int64).values
     else:
         minute_ts = np.arange(min_len, dtype=np.int64) * 60_000 + start_ms
 
